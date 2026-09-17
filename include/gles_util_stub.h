@@ -13,7 +13,7 @@
 #define BUFRANGE_CACHE_SLOTS 64
 #define SHADOW_TEX_INVALID 0xFFFFFFFFu
 
-extern unsigned int g_stub_current_ctx;
+extern __thread unsigned int g_stub_current_ctx;
 extern void loc_cache_invalidate_program(GLuint program);
 
 typedef struct
@@ -57,7 +57,8 @@ typedef struct
   GLint unpack_skip_images;
 } GLState;
 
-extern GLState stub_gl_state;
+extern GLState g_stub_gl_state[MAX_CONTEXTS];
+#define stub_gl_state g_stub_gl_state[g_stub_current_ctx]
 
 extern AttribState g_attrib_stub_state[MAX_VERTEX_ATTRIBS];
 extern GLContextState g_stub_ctx[MAX_CONTEXTS];
@@ -432,8 +433,6 @@ stub_vbo_piggyback_range(VAOState *vao, GLintptr first_vertex,
 
   return 0;
 }
-
-extern unsigned int g_stub_current_ctx; /* declared in bridge_core.h */
 
 #define MAX_TEXTURE_UNITS 32
 

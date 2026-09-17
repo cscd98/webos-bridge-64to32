@@ -56,7 +56,7 @@ WAYLAND_STUB_NAME ?= libwayland-client.so.0
 REAL_WAYLAND_LIB ?= libwayland-client-real.so.0
 
 # Additional debugging, disabled by default as too spammy
-DEBUG_TO_LOGFILE ?= 0
+DEBUG_TO_LOGFILE ?= 1
 DEBUG_VERBOSE ?= 0
 DEBUG_SHADERS ?= 0
 DEBUG_SHADER_TEST ?= 0

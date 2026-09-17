@@ -2606,8 +2606,9 @@ GL_APICALL void GL_APIENTRY glGetProgramBinary(GLuint program, GLsizei bufSize,
     *binaryFormat = fmt;
 
   /* Copy actual binary out of the shared region */
-  if (binary && len > 0)
-    bridge_data_read(binary, out, (size_t)len);
+  GLsizei copy_len = len > bufSize ? bufSize : len;
+  if (binary && copy_len > 0)
+    bridge_data_read(binary, out, (size_t)copy_len);
 
 #ifdef DEBUG_SHADERS
   log_console("glGetProgramBinary: program:%d bufSize:%d len=%d fmt:%d",

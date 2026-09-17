@@ -30,7 +30,7 @@
 #include "bridge_core.h"
 #include "gles_util_stub.h"
 
-GLState stub_gl_state;
+GLState g_stub_gl_state[MAX_CONTEXTS];
 
 AttribState g_attrib_stub_state[MAX_VERTEX_ATTRIBS];
 GLContextState g_stub_ctx[MAX_CONTEXTS];

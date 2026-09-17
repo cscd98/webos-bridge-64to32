@@ -2185,6 +2185,7 @@ void h_glGetProgramBinary(BridgeCtrl *C, uint8_t *D)
 
 #ifdef DEBUG_SHADERS
   log_console("h_glGetProgramBinary: program:%d bufSize:%d", program, bufSize);
+  glGetError();
 #endif
 
   GLsizei length = 0;
@@ -2194,6 +2195,20 @@ void h_glGetProgramBinary(BridgeCtrl *C, uint8_t *D)
    */
   glGetProgramBinary(program, bufSize, &length, &binaryFormat,
                      dp(C->data_offset));
+
+#ifdef DEBUG_SHADERS
+  GLenum err = glGetError();
+  if (length == 0 || err != GL_NO_ERROR)
+    log_error("h_glGetProgramBinary: program=%u bufSize=%d -> length=%d err=0x%x",
+            program, bufSize, length, err);
+#endif
+
+  if (length > bufSize)
+  {
+    log_error("h_glGetProgramBinary: program=%u driver reported length=%d > "
+      "bufSize=%d, clamping", program, length, bufSize);
+    length = bufSize;
+  }
 
   /* Return only the two scalars through result_buf */
   uint8_t *out = C->result_buf;

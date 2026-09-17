@@ -831,11 +831,11 @@ EGLAPI EGLBoolean EGLAPIENTRY eglMakeCurrent(EGLDisplay display,
                                              EGLSurface draw, EGLSurface read,
                                              EGLContext context)
 {
-  static uint32_t last_display = 0xFFFFFFFFu;
-  static uint32_t last_draw = 0xFFFFFFFFu;
-  static uint32_t last_read = 0xFFFFFFFFu;
-  static uint32_t last_context = 0xFFFFFFFFu;
-  static int have_last = 0;
+  static __thread uint32_t last_display = 0xFFFFFFFFu;
+  static __thread uint32_t last_draw = 0xFFFFFFFFu;
+  static __thread uint32_t last_read = 0xFFFFFFFFu;
+  static __thread uint32_t last_context = 0xFFFFFFFFu;
+  static __thread int have_last = 0;
 
   uint32_t d = H2I(display);
   uint32_t dr = H2I(draw);

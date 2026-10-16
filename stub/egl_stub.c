@@ -28,6 +28,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(DEBUG_VERBOSE) || defined(DEBUG_SHADERS)
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
+
 #include <wayland-client.h>
 
 #include "../tools/egl_generated.h"
@@ -831,6 +836,9 @@ EGLAPI EGLBoolean EGLAPIENTRY eglMakeCurrent(EGLDisplay display,
                                              EGLSurface draw, EGLSurface read,
                                              EGLContext context)
 {
+#ifdef DEBUG_VERBOSE
+  log_console("eglMakeCurrent(tid=%ld)", (long)syscall(SYS_gettid));
+#endif
   static __thread uint32_t last_display = 0xFFFFFFFFu;
   static __thread uint32_t last_draw = 0xFFFFFFFFu;
   static __thread uint32_t last_read = 0xFFFFFFFFu;

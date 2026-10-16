@@ -6,6 +6,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(DEBUG_VERBOSE) || defined(DEBUG_SHADERS)
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
+
 #define LOG_PREFIX "[gles32_stub]"
 #include "../bridge/shared_util.h"
 #include "../include/gles_util_stub.h"
@@ -2571,9 +2576,8 @@ GL_APICALL void GL_APIENTRY glGetProgramBinary(GLuint program, GLsizei bufSize,
                                                void *binary)
 {
 #ifdef DEBUG_SHADERS
-  log_console("glGetProgramBinary: program:%d bufSize:%d length=%d "
-              "binaryFormat:%d binary:%p",
-              program, bufSize, length, binaryFormat, binary);
+  log_console("glGetProgramBinary (tid=%ld): program:%d bufSize:%d length=%p "
+            "binaryFormat:%p binary:%p", (long)syscall(SYS_gettid), program, bufSize, (void*)length, (void*)binaryFormat, binary);
 #endif
 
   BRIDGE_BEGIN();
@@ -2604,6 +2608,10 @@ GL_APICALL void GL_APIENTRY glGetProgramBinary(GLuint program, GLsizei bufSize,
     *length = len;
   if (binaryFormat)
     *binaryFormat = fmt;
+
+  if (len > bufSize)
+    log_error("glGetProgramBinary (program:%d): driver returned len=%d > bufSize=%d!",
+              program, len, bufSize);
 
   /* Copy actual binary out of the shared region */
   GLsizei copy_len = len > bufSize ? bufSize : len;

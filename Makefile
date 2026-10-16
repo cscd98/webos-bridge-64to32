@@ -98,6 +98,7 @@ CFLAGS_64_BASE := \
     -fPIC \
     -std=c11 \
     -Wall -Wextra \
+    -D_GNU_SOURCE \
     -I$(INCLUDE_DIR) \
     -I$(GLES2_INCLUDE_64) \
     -DGLES_PROXY_DEFAULT_PATH=\"$(PROXY_INSTALL_PATH)\" \

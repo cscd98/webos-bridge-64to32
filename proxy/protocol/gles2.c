@@ -5,7 +5,7 @@
 #include "../include/gles_util_proxy.h"
 #include "../proxy.h"
 
-#ifdef DEBUG_VERBOSE
+#if defined(DEBUG_VERBOSE) || defined(DEBUG_SHADERS)
 #include <sys/syscall.h>
 #include <unistd.h>
 #endif
@@ -884,7 +884,7 @@ void h_glCreateShader(BridgeCtrl *C, uint8_t *D)
   AR(r);
 #ifdef DEBUG_SHADERS
   GLenum shaderType = ar_u32(&r);
-  log_console("h_glCreateShader: shaderType: %d", shaderType);
+  log_console("h_glCreateShader (tid=%ld): shaderType: %d", (long)syscall(SYS_gettid), shaderType);
   C->result = glCreateShader(shaderType);
   log_console("glCreateShader returned %llu", C->result);
 #else
@@ -959,7 +959,7 @@ void h_glCompileShader(BridgeCtrl *C, uint8_t *D)
   GLuint shader = ar_u32(&r);
 
 #ifdef DEBUG_SHADERS
-  log_console("ENTER glCompileShader(%u)", shader);
+  log_console("ENTER glCompileShader (tid=%ld):(%u)", (long)syscall(SYS_gettid), shader);
 
   GLenum e = glGetError();
 
@@ -1008,8 +1008,8 @@ void h_glGetShaderiv(BridgeCtrl *C, uint8_t *D)
   glGetShaderiv(shader, pname, &val);
 
 #ifdef DEBUG_SHADERS
-  log_console("h_glGetShaderiv: shader: %d pname: %d, params: %d", shader,
-              pname, val);
+  log_console("h_glGetShaderiv (tid=%ld): shader: %d pname: %d, params: %d", (long)syscall(SYS_gettid),
+              shader, pname, val);
 #endif
 
   C->result = (uint64_t)(int64_t)val;
@@ -1089,7 +1089,8 @@ void h_glCreateProgram(BridgeCtrl *C, uint8_t *D)
   C->result = glCreateProgram();
 
 #ifdef DEBUG_SHADERS
-  log_console("glCreateProgram -> %lluu (0x%llx)", C->result, C->result);
+  log_console("h_glCreateProgram (tid=%ld) -> %lluu (0x%llx)", (long)syscall(SYS_gettid),
+    C->result, C->result);
 #endif
 
   (void)D;
@@ -1108,7 +1109,8 @@ void h_glAttachShader(BridgeCtrl *C, uint8_t *D)
 #ifdef DEBUG_SHADERS
   GLuint program = ar_u32(&r);
   GLuint shader = ar_u32(&r);
-  log_console("h_glAttachShader (program %d, shader %d)", program, shader);
+  log_console("h_glAttachShader (tid=%ld): (program %d, shader %d)", (long)syscall(SYS_gettid),
+    program, shader);
   glAttachShader(program, shader);
 
   GL_LOG_IF_ERR("h_glAttachShader ERROR 0x%04x (program=%u shader=%u)",
@@ -1195,7 +1197,8 @@ void h_glLinkProgram(BridgeCtrl *C, uint8_t *D)
   GLint loglen = 0;
   glGetProgramiv(program, GL_INFO_LOG_LENGTH, &loglen);
 
-  log_console("link status=%d loglen=%d", ok, loglen);
+  log_console("h_glLinkProgram (tid=%ld): link status=%d loglen=%d", (long)syscall(SYS_gettid),
+    ok, loglen);
 
   if (loglen > 1)
   {
@@ -1240,15 +1243,15 @@ void h_glGetProgramiv(BridgeCtrl *C, uint8_t *D)
   AR(r);
   GLuint program = ar_u32(&r);
   GLenum pname = ar_u32(&r);
-  GLint val = 0;
-  glGetProgramiv(program, pname, &val);
-  C->result = (uint64_t)(int64_t)val;
+  GLint params = 0;
+  glGetProgramiv(program, pname, &params);
+  C->result = (uint64_t)(int64_t)params;
 #ifdef DEBUG_SHADERS
-  log_console("glGetProgramiv (program=%d pname=%d result=%d)", program, pname,
-              (uint64_t)(int64_t)val);
+  log_console("h_glGetProgramiv (tid=%ld): (program=%d pname=%d result=%d)", (long)syscall(SYS_gettid),
+              program, pname, params);
 
   // failed validation
-  if (pname == GL_VALIDATE_STATUS && val == 0)
+  if (pname == GL_VALIDATE_STATUS && params == 0)
   {
     glValidateProgram(program);
     GLint logLen = 0;
@@ -1474,9 +1477,9 @@ void h_glVertexAttribPointer(BridgeCtrl *C, uint8_t *D)
   GLuint vbo = ar_u32(&r);
 
 #ifdef DEBUG_VERBOSE
-  log_console("[h_glVertexAttribPointer] index=%u size=%d type=0x%x "
+  log_console("h_glVertexAttribPointer (tid=%ld) index=%u size=%d type=0x%x "
               "norm=%d stride=%d ptr=%p vbo=%u g_current_ctx:%d",
-              index, size, type, norm, stride, ptr, vbo, g_current_ctx);
+              (long)syscall(SYS_gettid), index, size, type, norm, stride, ptr, vbo, g_current_ctx);
 #endif
 
   /* Update proxy-side VAO shadow state */

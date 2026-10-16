@@ -1324,7 +1324,7 @@ typedef struct
   uint64_t data_watermark;
   uint8_t data_watermark_valid;
 
-  uint8_t _pad[4]; /* keep struct size a multiple of 8   */
+  uint8_t _pad[4]; // keep struct size a multiple of 8
 } BridgeCtrl;
 
 typedef struct

@@ -4,7 +4,7 @@
 #include "../include/gles_util_proxy.h"
 #include "../proxy.h"
 
-#ifdef DEBUG_VERBOSE
+#if defined(DEBUG_VERBOSE) || defined(DEBUG_SHADERS)
 #include <sys/syscall.h>
 #include <unistd.h>
 #endif
@@ -2184,8 +2184,9 @@ void h_glGetProgramBinary(BridgeCtrl *C, uint8_t *D)
   GLsizei bufSize = ar_i32(&r);
 
 #ifdef DEBUG_SHADERS
-  log_console("h_glGetProgramBinary: program:%d bufSize:%d", program, bufSize);
-  glGetError();
+  log_console("h_glGetProgramBinary (tid=%ld): program:%d bufSize:%d", (long)syscall(SYS_gettid),
+    program, bufSize);
+  GLenum prev_err = glGetError();
 #endif
 
   GLsizei length = 0;
@@ -2199,14 +2200,14 @@ void h_glGetProgramBinary(BridgeCtrl *C, uint8_t *D)
 #ifdef DEBUG_SHADERS
   GLenum err = glGetError();
   if (length == 0 || err != GL_NO_ERROR)
-    log_error("h_glGetProgramBinary: program=%u bufSize=%d -> length=%d err=0x%x",
-            program, bufSize, length, err);
+    log_error("h_glGetProgramBinary: program=%u bufSize=%d -> length=%d prev_err=0x%x err=0x%x",
+            program, bufSize, length, prev_err, err);
 #endif
 
   if (length > bufSize)
   {
     log_error("h_glGetProgramBinary: program=%u driver reported length=%d > "
-      "bufSize=%d, clamping", program, length, bufSize);
+      "bufSize=%d, clamping length!", program, length, bufSize);
     length = bufSize;
   }
 

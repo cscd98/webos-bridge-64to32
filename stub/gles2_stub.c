@@ -25,6 +25,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(DEBUG_VERBOSE) || defined(DEBUG_SHADERS)
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
+
 #define LOG_PREFIX "[gles_stub]"
 #include "../bridge/shared_util.h"
 #include "bridge_core.h"
@@ -1458,7 +1463,7 @@ GL_APICALL void GL_APIENTRY glShaderSource(GLuint shader, GLsizei count,
 GL_APICALL void GL_APIENTRY glCompileShader(GLuint shader)
 {
 #ifdef DEBUG_SHADERS
-  log_console("glCompileShader shader=%u", shader);
+  log_console("glCompileShader (tid=%ld) shader=%u", (long)syscall(SYS_gettid), shader);
 #endif
   BRIDGE_BEGIN();
   BridgeCtrl *C = BRIDGE_CTRL();
@@ -1473,7 +1478,7 @@ GL_APICALL void GL_APIENTRY glGetShaderiv(GLuint shader, GLenum pname,
                                           GLint *params)
 {
 #ifdef DEBUG_SHADERS
-  log_console("glGetShaderiv recv: (shader = %d, pname = %d)", shader, pname);
+  log_console("glGetShaderiv (tid=%ld) recv: (shader = %d, pname = %d)", (long)syscall(SYS_gettid), shader, pname);
 #endif
 
   BRIDGE_BEGIN();
@@ -1651,7 +1656,7 @@ GL_APICALL GLuint GL_APIENTRY glCreateProgram(void)
 #ifdef DEBUG_SHADERS
   GLuint result = (GLuint)BRIDGE_SEND_CALL();
 
-  log_console("glCreateProgram -> %u (0x%x)", result, result);
+  log_console("glCreateProgram (tid=%ld) -> %u (0x%x)", (long)syscall(SYS_gettid), result, result);
 
   return result;
 #else
@@ -1678,7 +1683,7 @@ GL_APICALL void GL_APIENTRY glDeleteProgram(GLuint program)
 GL_APICALL void GL_APIENTRY glAttachShader(GLuint program, GLuint shader)
 {
 #ifdef DEBUG_SHADERS
-  log_console("glAttachShader(prog=%u shader=%u)", program, shader);
+  log_console("glAttachShader(tid=%ld prog=%u shader=%u)", (long)syscall(SYS_gettid), program, shader);
 #endif
 
   BRIDGE_BEGIN();
@@ -1706,7 +1711,7 @@ GL_APICALL void GL_APIENTRY glDetachShader(GLuint program, GLuint shader)
 GL_APICALL void GL_APIENTRY glLinkProgram(GLuint program)
 {
 #ifdef DEBUG_SHADERS
-  log_console("glLinkProgram(program = %u)", program);
+  log_console("glLinkProgram(tid=%ld program = %u)", (long)syscall(SYS_gettid), program);
 #endif
 
 #ifdef CACHE_UNIFORM_ATTRIB_LOCATION
@@ -2241,6 +2246,7 @@ GL_APICALL void GL_APIENTRY glVertexAttribPointer(GLuint index, GLint size,
 
 #ifdef DEBUG_VERBOSE
   log_console("[glVertexAttribPointer]");
+  log_console(" tid=%d", (long)syscall(SYS_gettid));
   log_console(" index=%u", index);
   log_console(" size=%d", size);
   log_console(" type=0x%x", type);
@@ -2484,8 +2490,8 @@ GL_APICALL void GL_APIENTRY glDrawArrays(GLenum mode, GLint first,
   aw_u32(&W, 0);
 
 #ifdef DEBUG_VERBOSE
-  log_console("glDrawArrays: vao:%d mode:%d first:%d count:%d",
-              g_stub_ctx[g_stub_current_ctx].current_vao, mode, first, count);
+  log_console("glDrawArrays: tid:%d vao:%d mode:%d first:%d count:%d",
+              syscall(SYS_gettid), g_stub_ctx[g_stub_current_ctx].current_vao, mode, first, count);
 #endif
 
   for (int i = 0; i < MAX_VERTEX_ATTRIBS; i++)

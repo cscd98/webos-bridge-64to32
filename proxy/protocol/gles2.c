@@ -1783,7 +1783,10 @@ void h_glDrawArrays(BridgeCtrl *C, uint8_t *D)
   glDrawArrays(mode, first, count);
 
 #ifdef DEBUG_VERBOSE
-  if (fb == 1 && prog == 27)
+  GLint pack_pbo = 0;
+  glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &pack_pbo);
+  if (fb == 1 && prog == 27 && !pack_pbo &&
+      glCheckFramebufferStatus(GL_READ_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
   {
     GLint vp[4];
     glGetIntegerv(GL_VIEWPORT, vp);

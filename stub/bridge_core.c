@@ -73,8 +73,11 @@ unsigned int g_stub_new_ctx = 0;
 static BridgeRing *g_ring = NULL;
 static uint32_t g_ring_slots = 0;
 static uint32_t g_ring_mask = 0;
-static BridgeCtrl *g_cur_slot = NULL;
-static uint64_t g_cur_seq = 0;
+/* Per thread: bridge_send_call() drops g_lock before the caller reads its
+ * results through BRIDGE_CTRL(), and another thread's bridge_begin() must not
+ * repoint the slot it reads them from. */
+static __thread BridgeCtrl *g_cur_slot = NULL;
+static __thread uint64_t g_cur_seq = 0;
 
 /* Process-local — there is only ever one producer (serialized by g_lock),
  * so these don't need to live in shared memory or be atomic. */

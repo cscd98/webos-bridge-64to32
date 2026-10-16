@@ -2877,6 +2877,12 @@ void h_glDrawElementsBaseVertex(BridgeCtrl *C, uint8_t *D)
 #endif
 
 #ifdef DEBUG_VERBOSE
+  /* Only probe a readable target: a surfaceless context has no default
+   * framebuffer, and a bound pack buffer would take the pixel instead. */
+  GLint pack_pbo = 0;
+  glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &pack_pbo);
+  if (!pack_pbo &&
+      glCheckFramebufferStatus(GL_READ_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
   {
     GLubyte px[4] = {0, 0, 0, 0};
     GLint vp[4] = {0};

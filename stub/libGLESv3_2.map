@@ -357,6 +357,8 @@ global:
 
     glTexBuffer;
     glTexBufferRange;
+    glInvalidateFramebuffer;
+    glInvalidateSubFramebuffer;
 
     glCopyImageSubData;
 

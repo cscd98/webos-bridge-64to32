@@ -431,6 +431,8 @@ typedef enum
   OP_glSamplerParameterIuiv,
   OP_glTexBuffer,
   OP_glTexBufferRange,
+  OP_glInvalidateFramebuffer,
+  OP_glInvalidateSubFramebuffer,
   OP_glTexStorage2DMultisample,
   OP_glTexStorage3DMultisample,
   OP_glPrimitiveBoundingBox,
@@ -1220,6 +1222,10 @@ static inline char *opcode_to_string(GLBridgeOpcode op)
     return "glPatchParameteri";
   case OP_glTexBufferRange:
     return "glTexBufferRange";
+  case OP_glInvalidateFramebuffer:
+    return "glInvalidateFramebuffer";
+  case OP_glInvalidateSubFramebuffer:
+    return "glInvalidateSubFramebuffer";
 
 #ifdef HAVE_OWN_WAYLAND_EGL
   /* ---- Wayland EGL bridge ---- */

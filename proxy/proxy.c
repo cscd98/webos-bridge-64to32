@@ -498,6 +498,8 @@ static const HandlerFn dispatch_table[OP_MAX] = {
 
     ENTRY(OP_glPatchParameteri, h_glPatchParameteri),
     ENTRY(OP_glTexBufferRange, h_glTexBufferRange),
+    ENTRY(OP_glInvalidateFramebuffer, h_glInvalidateFramebuffer),
+    ENTRY(OP_glInvalidateSubFramebuffer, h_glInvalidateSubFramebuffer),
 
 /* Wayland - EGL */
 #ifdef HAVE_OWN_WAYLAND_EGL

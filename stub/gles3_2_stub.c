@@ -4338,3 +4338,51 @@ GL_APICALL void GL_APIENTRY glTexBufferRange(GLenum target,
 
   BRIDGE_SEND_CALL();
 }
+
+/* The attachment list goes through the data arena; the proxy passes it on */
+static void send_invalidate_framebuffer(GLBridgeOpcode op, GLenum target,
+                                        GLsizei numAttachments,
+                                        const GLenum *attachments, GLint x,
+                                        GLint y, GLsizei width, GLsizei height)
+{
+  BRIDGE_BEGIN();
+  BridgeCtrl *C = BRIDGE_CTRL();
+  setup_scalar(op);
+
+  const size_t bytes = (numAttachments > 0 && attachments)
+                           ? (size_t)numAttachments * sizeof(GLenum)
+                           : 0;
+  if (bytes)
+  {
+    C->data_offset = bridge_data_write(attachments, bytes);
+    C->data_size = (uint32_t)bytes;
+  }
+
+  ArgWriter W = aw_init(C->args, BRIDGE_ARGS_SIZE);
+  aw_u32(&W, target);
+  aw_i32(&W, bytes ? numAttachments : 0);
+  aw_i32(&W, x);
+  aw_i32(&W, y);
+  aw_i32(&W, width);
+  aw_i32(&W, height);
+  C->args_len = W.pos;
+
+  BRIDGE_SEND_VOID();
+}
+
+GL_APICALL void GL_APIENTRY glInvalidateFramebuffer(GLenum target,
+                                                    GLsizei numAttachments,
+                                                    const GLenum *attachments)
+{
+  send_invalidate_framebuffer(OP_glInvalidateFramebuffer, target,
+                              numAttachments, attachments, 0, 0, 0, 0);
+}
+
+GL_APICALL void GL_APIENTRY glInvalidateSubFramebuffer(
+    GLenum target, GLsizei numAttachments, const GLenum *attachments, GLint x,
+    GLint y, GLsizei width, GLsizei height)
+{
+  send_invalidate_framebuffer(OP_glInvalidateSubFramebuffer, target,
+                              numAttachments, attachments, x, y, width,
+                              height);
+}

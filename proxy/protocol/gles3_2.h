@@ -135,6 +135,8 @@ void h_glTexStorage3D(BridgeCtrl *C, uint8_t *D);
 
 void h_glTexBuffer(BridgeCtrl *C, uint8_t *D);
 void h_glTexBufferRange(BridgeCtrl *C, uint8_t *D);
+void h_glInvalidateFramebuffer(BridgeCtrl *C, uint8_t *D);
+void h_glInvalidateSubFramebuffer(BridgeCtrl *C, uint8_t *D);
 
 void h_glCopyImageSubData(BridgeCtrl *C, uint8_t *D);
 

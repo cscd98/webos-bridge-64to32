@@ -3754,3 +3754,31 @@ void h_glTexBufferRange(BridgeCtrl *C, uint8_t *D)
   C->result = 0;
   C->result_buf_len = 0;
 }
+
+void h_glInvalidateFramebuffer(BridgeCtrl *C, uint8_t *D)
+{
+  (void)D;
+  AR(r);
+  GLenum target = ar_u32(&r);
+  GLsizei count = ar_i32(&r);
+
+  if (count > 0)
+    glInvalidateFramebuffer(target, count, (const GLenum *)dp(C->data_offset));
+}
+
+void h_glInvalidateSubFramebuffer(BridgeCtrl *C, uint8_t *D)
+{
+  (void)D;
+  AR(r);
+  GLenum target = ar_u32(&r);
+  GLsizei count = ar_i32(&r);
+  GLint x = ar_i32(&r);
+  GLint y = ar_i32(&r);
+  GLsizei width = ar_i32(&r);
+  GLsizei height = ar_i32(&r);
+
+  if (count > 0)
+    glInvalidateSubFramebuffer(target, count,
+                               (const GLenum *)dp(C->data_offset), x, y, width,
+                               height);
+}

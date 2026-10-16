@@ -144,6 +144,7 @@ void h_glTexSubImage2D(BridgeCtrl *C, uint8_t *D)
   case 1:
     // PBO offset: pointer value passed directly from client
     data = (void *)(uintptr_t)C->data_offset; // matches stub's raw offset
+    apply_unpack_piggyback(C, C->data_offset);
     break;
 
   default:

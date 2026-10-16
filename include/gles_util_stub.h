@@ -443,6 +443,42 @@ stub_vbo_piggyback_range(VAOState *vao, GLintptr first_vertex,
   return 0;
 }
 
+/* With a persistently mapped GL_PIXEL_UNPACK_BUFFER bound, the client's texels
+ * only exist in the stub's copy of the mapping. Copy the bytes an upload will
+ * read ([offset, offset + bytes) of the buffer) into the data arena so the
+ * proxy can refresh its real mapping first. Explicit-flush maps send their
+ * own updates. */
+static inline uint32_t stub_unpack_piggyback(GLintptr offset, size_t bytes,
+                                             uint32_t *out_length)
+{
+  *out_length = 0;
+
+  GLuint pbo = stub_gl_state.pixel_unpack_buffer;
+  if (!pbo || !bytes || offset < 0)
+    return 0;
+
+  for (uint32_t mi = 1; mi < MAX_MAPS; mi++)
+  {
+    StubMapEntry *m = &stub_maps[mi];
+    if (!m->ptr || m->buffer != pbo)
+      continue;
+    if ((m->access & GL_MAP_FLUSH_EXPLICIT_BIT) || !(m->access & GL_MAP_WRITE_BIT))
+      return 0;
+    if (offset < m->offset || offset >= m->offset + (GLintptr)m->length)
+      return 0;
+
+    size_t local = (size_t)(offset - m->offset);
+    size_t copy = bytes;
+    if (local + copy > (size_t)m->length)
+      copy = (size_t)m->length - local;
+
+    *out_length = (uint32_t)copy;
+    return bridge_data_write((uint8_t *)m->ptr + local, copy);
+  }
+
+  return 0;
+}
+
 #define MAX_TEXTURE_UNITS 32
 
 /* ── shadow GL state ──────── */

@@ -813,10 +813,19 @@ GL_APICALL void GL_APIENTRY glTexSubImage3D(GLenum target, GLint level,
 
   C->args_len = W.pos;
 
+  C->data2_offset = 0;
+  C->data2_size = 0;
+
   if (stub_gl_state.pixel_unpack_buffer)
   {
     C->data_offset = (uint32_t)(uintptr_t)pixels;
     C->data_size = 0; // signal PBO mode
+
+    uint32_t len = 0;
+    uint32_t data_off =
+        stub_unpack_piggyback((GLintptr)(uintptr_t)pixels, bytes, &len);
+    C->data2_offset = data_off;
+    C->data2_size = len;
   }
   else
   {

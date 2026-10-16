@@ -281,12 +281,15 @@ GL_APICALL void GL_APIENTRY glTexSubImage2D(GLenum target, GLint level,
 #endif
 
   size_t pixel_bytes = 0;
-  if (pixels && width > 0 && height > 0)
+  if ((pixels || stub_gl_state.pixel_unpack_buffer) && width > 0 && height > 0)
     pixel_bytes = gl_unpack_image_size_2d(width, height, format, type);
 
   BRIDGE_BEGIN();
   BridgeCtrl *C = BRIDGE_CTRL();
   C->opcode = OP_glTexSubImage2D;
+
+  C->data2_offset = 0;
+  C->data2_size = 0;
 
   ArgWriter W = aw_init(C->args, BRIDGE_ARGS_SIZE);
   aw_u32(&W, target);
@@ -300,13 +303,8 @@ GL_APICALL void GL_APIENTRY glTexSubImage2D(GLenum target, GLint level,
 
   uint32_t pixel_mode;
 
-  if (!pixels)
-  {
-    pixel_mode = 0;
-    C->data_offset = 0;
-    C->data_size = 0;
-  }
-  else if (stub_gl_state.pixel_unpack_buffer)
+  /* With a PBO bound, pixels is a buffer offset - NULL included (offset 0) */
+  if (stub_gl_state.pixel_unpack_buffer)
   {
     pixel_mode = 1;
 
@@ -315,6 +313,18 @@ GL_APICALL void GL_APIENTRY glTexSubImage2D(GLenum target, GLint level,
       log_error("WARNING: PBO offset >4GB truncated: %p", pixels);
 
     C->data_offset = (uint32_t)(uintptr_t)pixels;
+    C->data_size = 0;
+
+    uint32_t len = 0;
+    uint32_t data_off =
+        stub_unpack_piggyback((GLintptr)off, pixel_bytes, &len);
+    C->data2_offset = data_off;
+    C->data2_size = len;
+  }
+  else if (!pixels)
+  {
+    pixel_mode = 0;
+    C->data_offset = 0;
     C->data_size = 0;
   }
   else
@@ -326,9 +336,6 @@ GL_APICALL void GL_APIENTRY glTexSubImage2D(GLenum target, GLint level,
 
   aw_u32(&W, pixel_mode);
   C->args_len = W.pos;
-
-  C->data2_offset = 0;
-  C->data2_size = 0;
 
   BRIDGE_SEND_VOID();
 }

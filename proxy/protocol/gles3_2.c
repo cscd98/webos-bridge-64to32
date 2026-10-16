@@ -857,6 +857,10 @@ void h_glTexSubImage3D(BridgeCtrl *C, uint8_t *D)
 {
   AR(r);
 
+  /* data_size == 0 is PBO mode: data_offset is the buffer offset */
+  if (C->data_size == 0)
+    apply_unpack_piggyback(C, C->data_offset);
+
 #ifdef DEBUG_VERBOSE
   GLenum target = ar_u32(&r);
   GLint level = ar_i32(&r);

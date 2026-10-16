@@ -1023,6 +1023,19 @@ static inline char *opcode_to_string(GLBridgeOpcode op)
   case OP_glUniform4uiv:
     return "glUniform4uiv";
 
+  case OP_glGetActiveUniformsiv:
+    return "glGetActiveUniformsiv";
+  case OP_glGetActiveUniformBlockiv:
+    return "glGetActiveUniformBlockiv";
+  case OP_glGetActiveUniformBlockName:
+    return "glGetActiveUniformBlockName";
+  case OP_glGetUniformBlockIndex:
+    return "glGetUniformBlockIndex";
+  case OP_glGetUniformIndices:
+    return "glGetUniformIndices";
+  case OP_glUniformBlockBinding:
+    return "glUniformBlockBinding";
+
   case OP_glColorMaski:
     return "glColorMaski";
   case OP_glEnablei:

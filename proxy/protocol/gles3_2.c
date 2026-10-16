@@ -9,7 +9,8 @@
 #include <unistd.h>
 #endif
 
-#define MAX_SYNCS 64
+/* Dolphin alone keeps 16 fences per stream buffer, across 4 buffers */
+#define MAX_SYNCS 256
 MapEntry maps[MAX_MAPS];
 static SyncEntry syncs[MAX_SYNCS];
 
@@ -2588,6 +2589,73 @@ void h_glTexStorage3DMultisample(BridgeCtrl *C, uint8_t *D)
   C->result_buf_len = 0;
 }
 
+#ifdef DEBUG_VERBOSE
+/* Decode the attrib-0 vertices a draw will fetch straight from the real
+ * mapped EBO/VBO, to check the piggybacked data is what the GPU reads. */
+static void log_draw_vertices(VAOState *vao, GLsizei count, GLenum type,
+                              uint64_t indices_off, GLint basevertex)
+{
+  GLint ebo = 0;
+  glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &ebo);
+  AttribState *a = &vao->attribs[0];
+  if (!ebo || !a->enabled || !a->vbo || a->type != GL_FLOAT)
+    return;
+
+  MapEntry *ie = NULL, *ve = NULL;
+  for (uint32_t i = 1; i < MAX_MAPS; i++)
+  {
+    if (!maps[i].real_ptr)
+      continue;
+    if (maps[i].buffer == (GLuint)ebo)
+      ie = &maps[i];
+    if (maps[i].buffer == (GLuint)a->vbo)
+      ve = &maps[i];
+  }
+  if (!ie || !ve)
+  {
+    log_console("[VERTS] EBO=%d or VBO=%u not mapped", ebo, a->vbo);
+    return;
+  }
+
+  size_t isz = type == GL_UNSIGNED_BYTE ? 1 : type == GL_UNSIGNED_SHORT ? 2 : 4;
+  uint32_t restart = type == GL_UNSIGNED_BYTE    ? 0xFFu
+                     : type == GL_UNSIGNED_SHORT ? 0xFFFFu
+                                                 : 0xFFFFFFFFu;
+  size_t stride = a->stride ? (size_t)a->stride : (size_t)a->size * 4;
+  int comps = a->size < 4 ? a->size : 4;
+
+  for (GLsizei i = 0; i < count && i < 8; i++)
+  {
+    GLintptr ioff = (GLintptr)indices_off + (GLintptr)(i * isz) - ie->offset;
+    if (ioff < 0 || ioff + (GLintptr)isz > (GLintptr)ie->length)
+    {
+      log_console("[VERTS] idx[%d] outside EBO map", i);
+      return;
+    }
+    uint32_t raw = 0;
+    memcpy(&raw, (uint8_t *)ie->real_ptr + ioff, isz);
+    if (raw == restart)
+    {
+      log_console("[VERTS] idx[%d]=restart", i);
+      continue;
+    }
+
+    GLintptr voff = (GLintptr)a->pointer +
+                    ((GLintptr)raw + basevertex) * (GLintptr)stride -
+                    ve->offset;
+    if (voff < 0 || voff + comps * 4 > (GLintptr)ve->length)
+    {
+      log_console("[VERTS] idx[%d]=%u outside VBO map", i, raw);
+      continue;
+    }
+    float p[4] = {0};
+    memcpy(p, (uint8_t *)ve->real_ptr + voff, (size_t)comps * 4);
+    log_console("[VERTS] idx[%d]=%u vbo_off=%ld pos=(%g, %g, %g, %g)", i, raw,
+                (long)(voff + ve->offset), p[0], p[1], p[2], p[3]);
+  }
+}
+#endif
+
 void h_glDrawElementsBaseVertex(BridgeCtrl *C, uint8_t *D)
 {
   (void)D;
@@ -2775,6 +2843,9 @@ void h_glDrawElementsBaseVertex(BridgeCtrl *C, uint8_t *D)
     log_console("h_glDrawElementsBaseVertex: ebo mode");
 #endif
     const void *indices = (const void *)(uintptr_t)indices_raw;
+#ifdef DEBUG_VERBOSE
+    log_draw_vertices(vao, count, type, indices_raw, basevertex);
+#endif
     glDrawElementsBaseVertex(mode, count, type, indices, basevertex);
   }
   else

@@ -3111,8 +3111,9 @@ GL_APICALL void GL_APIENTRY glDrawElementsBaseVertex(GLenum mode, GLsizei count,
   uint32_t piggyback_data_off = 0;
   GLintptr min_vertex = 0;
   GLintptr max_vertex = 0;
-  bool have_index_bounds = mapped_index_bounds(
-      index_bytes, count, type, basevertex, &min_vertex, &max_vertex);
+  bool have_index_bounds =
+      mapped_index_bounds(index_bytes, count, type, basevertex,
+                          ctx->primitive_restart, &min_vertex, &max_vertex);
 
   for (int ai = 0; ai < MAX_VERTEX_ATTRIBS && !piggyback_buffer; ai++)
   {

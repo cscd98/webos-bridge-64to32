@@ -2656,7 +2656,8 @@ GL_APICALL void GL_APIENTRY glDrawElements(GLenum mode, GLsizei count,
   {
     /* Compute the vertex index range so we copy exactly the data needed */
     GLintptr min_vertex = 0, max_vertex = (GLintptr)count - 1;
-    mapped_index_bounds(index_bytes, count, type, 0, &min_vertex, &max_vertex);
+    mapped_index_bounds(index_bytes, count, type, 0, ctx->primitive_restart,
+                        &min_vertex, &max_vertex);
     GLintptr last_vertex = max_vertex;
 
     for (int i = 0; i < MAX_VERTEX_ATTRIBS; i++)
@@ -2693,8 +2694,8 @@ GL_APICALL void GL_APIENTRY glDrawElements(GLenum mode, GLsizei count,
   /* Piggyback dirty mapped-VBO range */
   GLintptr first_vertex = 0, last_vertex2 = (GLintptr)count;
   if (index_bytes)
-    mapped_index_bounds(index_bytes, count, type, 0, &first_vertex,
-                        &last_vertex2);
+    mapped_index_bounds(index_bytes, count, type, 0, ctx->primitive_restart,
+                        &first_vertex, &last_vertex2);
 
   uint32_t piggyback_buffer = 0, piggyback_offset = 0, piggyback_length = 0;
   uint32_t piggyback_data_off = stub_vbo_piggyback_range(
@@ -2783,6 +2784,9 @@ GL_APICALL void GL_APIENTRY glScissor(GLint x, GLint y, GLsizei width,
 
 GL_APICALL void GL_APIENTRY glEnable(GLenum cap)
 {
+  if (cap == GL_PRIMITIVE_RESTART_FIXED_INDEX)
+    g_stub_ctx[g_stub_current_ctx].primitive_restart = 1;
+
 #ifdef CACHE_GL_STATE
   StubShadowState *s = shadow_state_for_current_ctx();
   GLboolean *slot = shadow_cap_slot(s, cap);
@@ -2804,6 +2808,9 @@ GL_APICALL void GL_APIENTRY glEnable(GLenum cap)
 
 GL_APICALL void GL_APIENTRY glDisable(GLenum cap)
 {
+  if (cap == GL_PRIMITIVE_RESTART_FIXED_INDEX)
+    g_stub_ctx[g_stub_current_ctx].primitive_restart = 0;
+
 #ifdef CACHE_GL_STATE
   StubShadowState *s = shadow_state_for_current_ctx();
   GLboolean *slot = shadow_cap_slot(s, cap);

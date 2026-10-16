@@ -60,6 +60,7 @@ typedef struct
 {
   VAOState vaos[MAX_VAOS];
   GLuint current_vao;
+  uint8_t primitive_restart; /* GL_PRIMITIVE_RESTART_FIXED_INDEX enabled */
 } GLContextState;
 
 typedef struct

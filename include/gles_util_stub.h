@@ -289,14 +289,20 @@ static inline StubMapEntry *find_stub_map(GLuint buffer, GLenum target)
   return NULL;
 }
 
-/* Scan index values to find the [min,max] vertex range */
+/* Scan index values to find the [min,max] vertex range. With primitive
+ * restart enabled, the all-ones index for the type is a strip separator, not
+ * a vertex; counting it would stretch the range to basevertex + 0xFFFF. */
 static inline bool mapped_index_bounds(const uint8_t *idx, GLsizei count,
                                        GLenum type, GLint basevertex,
-                                       GLintptr *min_vertex,
+                                       bool restart, GLintptr *min_vertex,
                                        GLintptr *max_vertex)
 {
   if (!idx || count <= 0)
     return false;
+
+  uint32_t restart_index = type == GL_UNSIGNED_BYTE    ? 0xFFu
+                           : type == GL_UNSIGNED_SHORT ? 0xFFFFu
+                                                       : 0xFFFFFFFFu;
 
   bool have_index = false;
   GLintptr min_v = 0;
@@ -328,6 +334,9 @@ static inline bool mapped_index_bounds(const uint8_t *idx, GLsizei count,
     default:
       return false;
     }
+
+    if (restart && raw == restart_index)
+      continue;
 
     GLintptr vertex = (GLintptr)raw + (GLintptr)basevertex;
     if (!have_index)

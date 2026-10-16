@@ -1324,7 +1324,9 @@ typedef struct
   uint64_t data_watermark;
   uint8_t data_watermark_valid;
 
-  uint8_t _pad[4]; // keep struct size a multiple of 8
+  /* Stub-side context index of the issuing thread (0 = none). The proxy
+   * makes this context current before dispatching the slot. */
+  uint32_t target_ctx;
 } BridgeCtrl;
 
 typedef struct

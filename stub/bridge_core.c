@@ -448,6 +448,7 @@ void bridge_begin(void)
 
   g_cur_slot = ring_reserve_slot(&g_cur_seq);
   g_cur_slot->client_pid = g_client_pid;
+  g_cur_slot->target_ctx = g_stub_current_ctx;
   g_cur_slot->data_watermark = g_local_data_head;
   g_cur_slot->data_watermark_valid = 0;
 }

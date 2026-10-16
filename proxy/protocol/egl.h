@@ -29,6 +29,7 @@ extern EGLHandleEntry egl_surfaces[EGL_BRIDGE_MAX_SURFACES + 1];
 extern uint32_t g_current_ctx;
 
 void egl_tables_init(void);
+void egl_bind_target_ctx(uint32_t ctx);
 void dump_ctx(const char *where);
 
 /* ── EGL handlers ────────────────────────────────────────────────────────── */

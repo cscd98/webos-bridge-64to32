@@ -29,6 +29,18 @@ EGLHandleEntry egl_surfaces[EGL_BRIDGE_MAX_SURFACES + 1];
 
 uint32_t g_current_ctx = 0;
 
+/* Surfaces each context was last made current with, so the proxy can
+ * re-bind a context when a different stub thread's command arrives. */
+typedef struct
+{
+  EGLDisplay dpy;
+  EGLSurface draw;
+  EGLSurface read;
+  uint8_t valid;
+} CtxBinding;
+
+static CtxBinding g_ctx_bindings[EGL_BRIDGE_MAX_CONTEXTS + 1];
+
 // EGL extensions dynamic lookup
 typedef struct
 {
@@ -103,6 +115,34 @@ void dump_ctx(const char *where)
 #define CFG(i) egl_configs[(i) <= EGL_BRIDGE_MAX_CONFIGS ? (i) : 0].handle
 #define CTX(i) egl_contexts[(i) <= EGL_BRIDGE_MAX_CONTEXTS ? (i) : 0].handle
 #define SURF(i) egl_surfaces[(i) <= EGL_BRIDGE_MAX_SURFACES ? (i) : 0].handle
+
+/* All stub threads are serviced by this single proxy thread, so the real
+ * current context must follow whichever stub thread issued the command. */
+void egl_bind_target_ctx(uint32_t ctx)
+{
+  if (ctx == 0 || ctx == g_current_ctx || ctx >= MAX_CONTEXTS)
+    return;
+
+  CtxBinding *b = &g_ctx_bindings[ctx];
+  if (!b->valid || !CTX(ctx))
+  {
+    log_error("egl_bind_target_ctx: ctx %u has no recorded binding", ctx);
+    return;
+  }
+
+  if (!eglMakeCurrent(b->dpy, b->draw, b->read, CTX(ctx)))
+  {
+    log_error("egl_bind_target_ctx: eglMakeCurrent ctx %u failed (err=0x%x)",
+              ctx, eglGetError());
+    return;
+  }
+
+#ifdef DEBUG_VERBOSE
+  log_console("egl_bind_target_ctx: switched ctx %u -> %u", g_current_ctx,
+              ctx);
+#endif
+  g_current_ctx = ctx;
+}
 
 /* ── EGL handlers ────────────────────────────────────────────────────────── */
 
@@ -306,6 +346,8 @@ void h_eglTerminate(BridgeCtrl *C, uint8_t *D)
 void h_eglReleaseThread(BridgeCtrl *C, uint8_t *D)
 {
   C->result = eglReleaseThread();
+  if (C->result)
+    g_current_ctx = 0;
   (void)C;
   (void)D;
 }
@@ -667,9 +709,21 @@ void h_eglDestroySurface(BridgeCtrl *C, uint8_t *D)
   uint32_t di = ar_u32(&r);
   uint32_t si = ar_u32(&r);
 
-  EGLBoolean ok = eglDestroySurface(DISP(di), SURF(si));
+  EGLSurface real = SURF(si);
+  EGLBoolean ok = eglDestroySurface(DISP(di), real);
   if (ok)
+  {
     TABLE_FREE(egl_surfaces, si);
+
+    /* Don't re-bind a context to a dead surface later */
+    for (uint32_t i = 1; i <= EGL_BRIDGE_MAX_CONTEXTS; i++)
+    {
+      if (g_ctx_bindings[i].draw == real)
+        g_ctx_bindings[i].draw = EGL_NO_SURFACE;
+      if (g_ctx_bindings[i].read == real)
+        g_ctx_bindings[i].read = EGL_NO_SURFACE;
+    }
+  }
   egl_surfaces[si].owner_pid = 0;
   C->result = ok;
 
@@ -805,7 +859,11 @@ void h_eglDestroyContext(BridgeCtrl *C, uint8_t *D)
 
   EGLBoolean ok = eglDestroyContext(DISP(di), CTX(xi));
   if (ok)
+  {
     TABLE_FREE(egl_contexts, xi);
+    if (xi <= EGL_BRIDGE_MAX_CONTEXTS)
+      g_ctx_bindings[xi].valid = 0;
+  }
   egl_contexts[xi].owner_pid = 0;
   C->result = ok;
 
@@ -840,6 +898,15 @@ void h_eglMakeCurrent(BridgeCtrl *C, uint8_t *D)
   if (C->result)
   {
     g_current_ctx = context;
+
+    if (context != 0 && context <= EGL_BRIDGE_MAX_CONTEXTS)
+    {
+      CtxBinding *b = &g_ctx_bindings[context];
+      b->dpy = DISP(display);
+      b->draw = SURF(draw);
+      b->read = SURF(read);
+      b->valid = 1;
+    }
 #ifdef DEBUG_VERBOSE
     log_console("h_eglMakeCurrent: g_current_ctx now set to:%d", g_current_ctx);
 #endif

@@ -772,6 +772,11 @@ int main(int argc, char **argv)
     BridgeCtrl *c = &ring->slots[completed & g_ring_mask];
     uint32_t opc = c->opcode;
 
+    /* eglMakeCurrent carries the thread's previous context; let it bind
+     * its own target instead. */
+    if (opc != OP_eglMakeCurrent)
+      egl_bind_target_ctx(c->target_ctx);
+
 #ifdef DEBUG_OPCODES
     log_console("dispatching opcode %u (%s)", opc, opcode_to_string(opc));
 #endif

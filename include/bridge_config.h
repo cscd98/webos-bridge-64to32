@@ -16,7 +16,7 @@ extern "C"
 #define BRIDGE_CONFIG_PATH                                                     \
   "/media/developer/apps/usr/palm/applications/org.webosbrew.bridge-64to32/"   \
   "bridge.conf"
-#define BRIDGE_RING_SLOTS_DEFAULT 1024u
+#define BRIDGE_RING_SLOTS_DEFAULT 256u
 #define BRIDGE_RING_SLOTS_MIN 64u
 #define BRIDGE_RING_SLOTS_MAX 65536u
 

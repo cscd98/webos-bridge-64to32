@@ -149,7 +149,7 @@ static const char *fs = "#version 300 es\n"
 // ---------------- Settings menu ----------------
 static int g_settings_open = 0;
 static int g_cube_paused = 0;
-static uint32_t g_ring_slots = 256;
+static uint32_t g_ring_slots = BRIDGE_RING_SLOTS_DEFAULT;
 static float g_last_scroll_time = 0.0f;
 static int g_pending_save = 0;
 
@@ -243,7 +243,7 @@ static uint32_t settings_round_up_pow2(uint32_t v)
 
 static uint32_t settings_load_ring_slots(void)
 {
-  uint32_t slots = 256;
+  uint32_t slots = BRIDGE_RING_SLOTS_DEFAULT;
 
   FILE *f = fopen(BRIDGE_CONFIG_PATH, "r");
   if (!f)

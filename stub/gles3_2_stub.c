@@ -20,6 +20,10 @@
 StubMapEntry stub_maps[MAX_MAPS];
 static uint32_t g_active_stub_map_count = 0;
 
+/* Sync IDs handed out by glFenceSync; only touched under the bridge lock */
+static uint8_t g_sync_used[BRIDGE_MAX_SYNCS];
+static uint32_t g_sync_next = 1;
+
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 static void setup_scalar(GLBridgeOpcode op)
 {
@@ -475,18 +479,48 @@ GL_APICALL GLsync GL_APIENTRY glFenceSync(GLenum condition, GLbitfield flags)
 
   setup_scalar(OP_glFenceSync);
 
+  uint32_t id = 0;
+  for (uint32_t n = 1; n < BRIDGE_MAX_SYNCS; n++)
+  {
+    uint32_t i = g_sync_next;
+    g_sync_next = i + 1 < BRIDGE_MAX_SYNCS ? i + 1 : 1;
+    if (!g_sync_used[i])
+    {
+      id = i;
+      break;
+    }
+  }
+
+  if (!id)
+  {
+    log_error("glFenceSync: all %u sync IDs in use", BRIDGE_MAX_SYNCS - 1);
+    /* still need to send something for the reserved slot */
+    C->opcode = OP_glFlush;
+    C->args_len = 0;
+    BRIDGE_SEND_VOID();
+    return NULL;
+  }
+  g_sync_used[id] = 1;
+
   ArgWriter W = aw_init(C->args, BRIDGE_ARGS_SIZE);
+  aw_u32(&W, id);
   aw_u32(&W, condition);
   aw_u32(&W, flags);
   C->args_len = W.pos;
 
-  uint32_t id = (uint32_t)BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
   return (GLsync)(uintptr_t)id;
 }
 
 GL_APICALL GLenum GL_APIENTRY glClientWaitSync(GLsync sync, GLbitfield flags,
                                                GLuint64 timeout)
 {
+  /* fast_client_wait: every command before the fence is already queued in
+   * the ring and its data copied out of the app's memory, so only wait if
+   * the app relies on the GPU having finished (opt-in, see bridge.conf). */
+  if (bridge_config_fast_client_wait() && sync)
+    return GL_ALREADY_SIGNALED;
+
   BRIDGE_BEGIN();
   BridgeCtrl *C = BRIDGE_CTRL();
 
@@ -508,8 +542,12 @@ GL_APICALL void GL_APIENTRY glDeleteSync(GLsync sync)
 
   setup_scalar(OP_glDeleteSync);
 
+  uint32_t id = (uint32_t)(uintptr_t)sync;
+  if (id < BRIDGE_MAX_SYNCS)
+    g_sync_used[id] = 0;
+
   ArgWriter W = aw_init(C->args, BRIDGE_ARGS_SIZE);
-  aw_u32(&W, (uint32_t)(uintptr_t)sync);
+  aw_u32(&W, id);
   C->args_len = W.pos;
 
   BRIDGE_SEND_VOID();
@@ -2546,7 +2584,7 @@ GL_APICALL void GL_APIENTRY glSamplerParameterIiv(GLuint sampler, GLenum pname,
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glGetPointerv(GLenum pname, void **params)
@@ -2576,7 +2614,7 @@ GL_APICALL void GL_APIENTRY glPopDebugGroup(void)
 
   C->args_len = 0;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glGetProgramBinary(GLuint program, GLsizei bufSize,
@@ -2643,7 +2681,7 @@ GL_APICALL void GL_APIENTRY glReadBuffer(GLenum src)
   aw_u32(&W, src);
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glDrawBuffers(GLsizei n, const GLenum *bufs)
@@ -2678,7 +2716,7 @@ GL_APICALL void GL_APIENTRY glClearBufferfi(GLenum buffer, GLint drawbuffer,
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glClearBufferfv(GLenum buffer, GLint drawbuffer,
@@ -2699,7 +2737,7 @@ GL_APICALL void GL_APIENTRY glClearBufferfv(GLenum buffer, GLint drawbuffer,
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glClearBufferiv(GLenum buffer, GLint drawbuffer,
@@ -2720,7 +2758,7 @@ GL_APICALL void GL_APIENTRY glClearBufferiv(GLenum buffer, GLint drawbuffer,
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glClearBufferuiv(GLenum buffer, GLint drawbuffer,
@@ -2741,7 +2779,7 @@ GL_APICALL void GL_APIENTRY glClearBufferuiv(GLenum buffer, GLint drawbuffer,
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glTexBuffer(GLenum target, GLenum internalformat,
@@ -2818,7 +2856,7 @@ GL_APICALL void GL_APIENTRY glFramebufferTexture(GLenum target,
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glGetInternalformativ(GLenum target,
@@ -2933,7 +2971,7 @@ GL_APICALL void GL_APIENTRY glSamplerParameterIuiv(GLuint sampler, GLenum pname,
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glProgramBinary(GLuint program, GLenum binaryFormat,
@@ -2999,7 +3037,7 @@ GL_APICALL void GL_APIENTRY glProgramParameteri(GLuint program, GLenum pname,
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glTexStorage3DMultisample(
@@ -3022,7 +3060,7 @@ GL_APICALL void GL_APIENTRY glTexStorage3DMultisample(
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glDrawElementsBaseVertex(GLenum mode, GLsizei count,
@@ -3242,7 +3280,7 @@ GL_APICALL void GL_APIENTRY glDrawElementsInstancedBaseVertex(
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glDrawRangeElementsBaseVertex(
@@ -3265,7 +3303,7 @@ GL_APICALL void GL_APIENTRY glDrawRangeElementsBaseVertex(
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glMinSampleShading(GLfloat value)
@@ -3278,7 +3316,7 @@ GL_APICALL void GL_APIENTRY glMinSampleShading(GLfloat value)
   aw_f32(&W, value);
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glDebugMessageInsert(GLenum source, GLenum type,
@@ -3312,7 +3350,7 @@ GL_APICALL void GL_APIENTRY glDebugMessageInsert(GLenum source, GLenum type,
     C->data_size = 0;
   }
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL GLuint GL_APIENTRY glGetDebugMessageLog(
@@ -3458,7 +3496,7 @@ GL_APICALL void GL_APIENTRY glObjectLabel(GLenum identifier, GLuint name,
     C->data_size = 0;
   }
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 #endif
 }
 
@@ -3490,7 +3528,7 @@ GL_APICALL void GL_APIENTRY glPushDebugGroup(GLenum source, GLuint id,
     C->data_size = 0;
   }
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY
@@ -3566,7 +3604,7 @@ GL_APICALL void GL_APIENTRY glDispatchCompute(GLuint num_groups_x,
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glDispatchComputeIndirect(GLintptr indirect)
@@ -3579,7 +3617,7 @@ GL_APICALL void GL_APIENTRY glDispatchComputeIndirect(GLintptr indirect)
   aw_u64(&W, (uint64_t)indirect);
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glTexStorage2DMultisample(
@@ -3601,7 +3639,7 @@ GL_APICALL void GL_APIENTRY glTexStorage2DMultisample(
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glObjectPtrLabel(const void *ptr, GLsizei length,
@@ -3630,7 +3668,7 @@ GL_APICALL void GL_APIENTRY glObjectPtrLabel(const void *ptr, GLsizei length,
     C->data_size = 0;
   }
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glPrimitiveBoundingBox(GLfloat minX, GLfloat minY,
@@ -3655,7 +3693,7 @@ GL_APICALL void GL_APIENTRY glPrimitiveBoundingBox(GLfloat minX, GLfloat minY,
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glUseProgramStages(GLuint pipeline,
@@ -3674,7 +3712,7 @@ GL_APICALL void GL_APIENTRY glUseProgramStages(GLuint pipeline,
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glBindProgramPipeline(GLuint pipeline)
@@ -3687,7 +3725,7 @@ GL_APICALL void GL_APIENTRY glBindProgramPipeline(GLuint pipeline)
   aw_u32(&W, pipeline);
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glGenProgramPipelines(GLsizei n, GLuint *pipelines)
@@ -3724,7 +3762,7 @@ GL_APICALL void GL_APIENTRY glDeleteProgramPipelines(GLsizei n,
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL GLboolean GL_APIENTRY glIsProgramPipeline(GLuint pipeline)
@@ -3759,7 +3797,7 @@ GL_APICALL void GL_APIENTRY glDrawArraysIndirect(GLenum mode,
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glDrawElementsIndirect(GLenum mode, GLenum type,
@@ -3777,7 +3815,7 @@ GL_APICALL void GL_APIENTRY glDrawElementsIndirect(GLenum mode, GLenum type,
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 // -----------------------------
@@ -4088,7 +4126,7 @@ GL_APICALL void GL_APIENTRY glActiveShaderProgram(GLuint pipeline,
   aw_u32(&W, program);
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL GLuint GL_APIENTRY
@@ -4146,7 +4184,7 @@ GL_APICALL void GL_APIENTRY glValidateProgramPipeline(GLuint pipeline)
   aw_u32(&W, pipeline);
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glGetProgramPipelineInfoLog(GLuint pipeline,
@@ -4185,7 +4223,7 @@ GL_APICALL void GL_APIENTRY glMemoryBarrierByRegion(GLbitfield barriers)
   aw_u32(&W, barriers);
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 // -----------------------------
@@ -4198,7 +4236,7 @@ GL_APICALL void GL_APIENTRY glBlendBarrier(void)
   setup_scalar(OP_glBlendBarrier);
 
   C->args_len = 0;
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 // -----------------------------
@@ -4313,7 +4351,7 @@ GL_APICALL void GL_APIENTRY glPatchParameteri(GLenum pname, GLint value)
   aw_i32(&W, value);
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 // -----------------------------
@@ -4336,7 +4374,7 @@ GL_APICALL void GL_APIENTRY glTexBufferRange(GLenum target,
   aw_u64(&W, (uint64_t)size);
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 /* The attachment list goes through the data arena; the proxy passes it on */

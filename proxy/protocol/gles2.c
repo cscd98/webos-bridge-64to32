@@ -13,6 +13,164 @@
 AttribState g_attrib_proxy_state[MAX_VERTEX_ATTRIBS];
 GLContextState g_proxy_ctx[MAX_CONTEXTS];
 
+/* ── FBO attachment cache ──────────────────────────────────────────────────
+ * Re-attaching the texture an FBO already has still makes the Mali driver
+ * revalidate the framebuffer. */
+#define FBO_CACHE_CTXS (EGL_BRIDGE_MAX_CONTEXTS + 1)
+#define FBO_CACHE_ENTRIES 64
+
+typedef struct
+{
+  GLuint fbo; /* 0 = unused */
+  GLenum attachment;
+  GLenum textarget;
+  GLuint texture;
+  GLint level;
+} FboAttachEntry;
+
+static GLuint g_fbo_draw[FBO_CACHE_CTXS];
+static GLuint g_fbo_read[FBO_CACHE_CTXS];
+static FboAttachEntry g_fbo_cache[FBO_CACHE_CTXS][FBO_CACHE_ENTRIES];
+#ifdef DEBUG_FRAMETIME
+uint32_t g_fbo_attach_skipped = 0;
+#endif
+
+static uint32_t fbo_cache_ctx(void)
+{
+  return g_current_ctx < FBO_CACHE_CTXS ? g_current_ctx : 0;
+}
+
+static GLuint fbo_cache_bound(GLenum target)
+{
+  uint32_t c = fbo_cache_ctx();
+  return target == GL_READ_FRAMEBUFFER ? g_fbo_read[c] : g_fbo_draw[c];
+}
+
+/* depth, stencil and depth_stencil alias each other */
+static int fbo_attachments_alias(GLenum a, GLenum b)
+{
+  if (a == b)
+    return 1;
+  int ad = a == GL_DEPTH_ATTACHMENT || a == GL_STENCIL_ATTACHMENT ||
+           a == GL_DEPTH_STENCIL_ATTACHMENT;
+  int bd = b == GL_DEPTH_ATTACHMENT || b == GL_STENCIL_ATTACHMENT ||
+           b == GL_DEPTH_STENCIL_ATTACHMENT;
+  return ad && bd;
+}
+
+void fbo_cache_reset_ctx(uint32_t ctx)
+{
+  if (ctx >= FBO_CACHE_CTXS)
+    return;
+  memset(g_fbo_cache[ctx], 0, sizeof(g_fbo_cache[ctx]));
+  g_fbo_draw[ctx] = 0;
+  g_fbo_read[ctx] = 0;
+}
+
+void fbo_cache_invalidate_attachment(GLenum target, GLenum attachment)
+{
+  GLuint fbo = fbo_cache_bound(target);
+  FboAttachEntry *e = g_fbo_cache[fbo_cache_ctx()];
+  for (int i = 0; i < FBO_CACHE_ENTRIES; i++)
+    if (e[i].fbo == fbo && fbo_attachments_alias(e[i].attachment, attachment))
+      e[i].fbo = 0;
+}
+
+/* Returns 1 if this exact attachment is already in place */
+static int fbo_cache_attach(GLenum target, GLenum attachment,
+                            GLenum textarget, GLuint texture, GLint level)
+{
+  GLuint fbo = fbo_cache_bound(target);
+  if (!fbo)
+    return 0; /* default framebuffer: not attachable, let GL report it */
+
+  FboAttachEntry *e = g_fbo_cache[fbo_cache_ctx()];
+  FboAttachEntry *slot = NULL;
+
+  for (int i = 0; i < FBO_CACHE_ENTRIES; i++)
+  {
+    if (e[i].fbo == fbo && e[i].attachment == attachment)
+    {
+      if (e[i].textarget == textarget && e[i].texture == texture &&
+          e[i].level == level)
+        return 1;
+      slot = &e[i];
+      break;
+    }
+  }
+
+  /* changing depth/stencil also changes the aliased entries */
+  for (int i = 0; i < FBO_CACHE_ENTRIES; i++)
+    if (e[i].fbo == fbo && &e[i] != slot && e[i].attachment != attachment &&
+        fbo_attachments_alias(e[i].attachment, attachment))
+      e[i].fbo = 0;
+
+  if (!slot)
+  {
+    for (int i = 0; i < FBO_CACHE_ENTRIES && !slot; i++)
+      if (!e[i].fbo)
+        slot = &e[i];
+    if (!slot)
+    {
+      /* full: start over rather than track LRU */
+      memset(e, 0, sizeof(g_fbo_cache[0]));
+      slot = &e[0];
+    }
+  }
+
+  slot->fbo = fbo;
+  slot->attachment = attachment;
+  slot->textarget = textarget;
+  slot->texture = texture;
+  slot->level = level;
+  return 0;
+}
+
+static void fbo_cache_forget_textures(GLsizei n, const GLuint *tex)
+{
+  /* textures are shared across contexts, so check every context */
+  for (int c = 0; c < FBO_CACHE_CTXS; c++)
+    for (int i = 0; i < FBO_CACHE_ENTRIES; i++)
+    {
+      FboAttachEntry *e = &g_fbo_cache[c][i];
+      if (!e->fbo)
+        continue;
+      for (GLsizei k = 0; k < n; k++)
+        if (tex[k] && e->texture == tex[k])
+        {
+          e->fbo = 0;
+          break;
+        }
+    }
+}
+
+static void fbo_cache_forget_fbos(GLsizei n, const GLuint *fbs)
+{
+  uint32_t c = fbo_cache_ctx();
+  for (GLsizei k = 0; k < n; k++)
+  {
+    if (!fbs[k])
+      continue;
+    for (int i = 0; i < FBO_CACHE_ENTRIES; i++)
+      if (g_fbo_cache[c][i].fbo == fbs[k])
+        g_fbo_cache[c][i].fbo = 0;
+    /* deleting a bound FBO reverts that binding to 0 */
+    if (g_fbo_draw[c] == fbs[k])
+      g_fbo_draw[c] = 0;
+    if (g_fbo_read[c] == fbs[k])
+      g_fbo_read[c] = 0;
+  }
+}
+
+static void fbo_cache_bind(GLenum target, GLuint fb)
+{
+  uint32_t c = fbo_cache_ctx();
+  if (target == GL_FRAMEBUFFER || target == GL_DRAW_FRAMEBUFFER)
+    g_fbo_draw[c] = fb;
+  if (target == GL_FRAMEBUFFER || target == GL_READ_FRAMEBUFFER)
+    g_fbo_read[c] = fb;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
  * Per-opcode handlers
  * Each takes (BridgeCtrl *C, uint8_t *D) where D = data base address.
@@ -79,7 +237,9 @@ void h_glDeleteTextures(BridgeCtrl *C, uint8_t *D)
 {
   AR(r);
   GLsizei n = ar_i32(&r);
-  glDeleteTextures(n, (const GLuint *)dp(C->data_offset));
+  const GLuint *tex = (const GLuint *)dp(C->data_offset);
+  fbo_cache_forget_textures(n, tex);
+  glDeleteTextures(n, tex);
   (void)D;
 }
 
@@ -566,6 +726,7 @@ void h_glDeleteFramebuffers(BridgeCtrl *C, uint8_t *D)
     log_console("h_glDeleteFramebuffers fbs[%d]=%u", i, fbs[i]);
 #endif
 
+  fbo_cache_forget_fbos(n, fbs);
   glDeleteFramebuffers(n, fbs);
 }
 
@@ -590,6 +751,7 @@ void h_glBindFramebuffer(BridgeCtrl *C, uint8_t *D)
   log_console("    prev_gl_err=0x%04x", prev_err);
 
   glBindFramebuffer(target, fb);
+  fbo_cache_bind(target, fb);
 
   GL_LOG_IF_ERR("    glBindFramebuffer -> after_err=0x%04x", after_err);
 
@@ -644,7 +806,10 @@ void h_glBindFramebuffer(BridgeCtrl *C, uint8_t *D)
   log_console("[h_glBindFramebuffer] END");
 
 #else
-  glBindFramebuffer(ar_u32(&r), ar_u32(&r));
+  GLenum target = ar_u32(&r);
+  GLuint fb = ar_u32(&r);
+  glBindFramebuffer(target, fb);
+  fbo_cache_bind(target, fb);
 #endif
 }
 
@@ -664,6 +829,15 @@ void h_glFramebufferTexture2D(BridgeCtrl *C, uint8_t *D)
               target, attachment, textarget, texture, level, g_current_ctx);
   GLint before_err = glGetError();
 #endif
+
+  if (fbo_cache_attach(target, attachment, textarget, texture, level))
+  {
+#ifdef DEBUG_FRAMETIME
+    g_fbo_attach_skipped++;
+#endif
+    (void)D;
+    return;
+  }
 
   glFramebufferTexture2D(target, attachment, textarget, texture, level);
 
@@ -706,6 +880,7 @@ void h_glFramebufferRenderbuffer(BridgeCtrl *C, uint8_t *D)
 
   glFramebufferRenderbuffer(target, attachment, renderbuffertarget,
                             renderbuffer);
+  fbo_cache_invalidate_attachment(target, attachment);
   GLenum after_egl_err = eglGetError();
 
   GL_LOG_IF_ERR("h_glGenRenderbuffers: prev_err=0x%x err=0x%x "
@@ -718,7 +893,13 @@ void h_glFramebufferRenderbuffer(BridgeCtrl *C, uint8_t *D)
 #endif
 
 #else
-  glFramebufferRenderbuffer(ar_u32(&r), ar_u32(&r), ar_u32(&r), ar_u32(&r));
+  GLenum target = ar_u32(&r);
+  GLenum attachment = ar_u32(&r);
+  GLenum renderbuffertarget = ar_u32(&r);
+  GLuint renderbuffer = ar_u32(&r);
+  glFramebufferRenderbuffer(target, attachment, renderbuffertarget,
+                            renderbuffer);
+  fbo_cache_invalidate_attachment(target, attachment);
 #endif
   (void)D;
 }
@@ -1742,7 +1923,6 @@ void h_glDrawArrays(BridgeCtrl *C, uint8_t *D)
 #endif
 
   GLint prev_array_buffer = 0;
-  glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
 
   bool restoreArrayBuffer = false;
 
@@ -1760,6 +1940,8 @@ void h_glDrawArrays(BridgeCtrl *C, uint8_t *D)
     if (a->vbo != 0)
       continue;
 
+    if (!restoreArrayBuffer)
+      glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
     restoreArrayBuffer = true;
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -1782,7 +1964,7 @@ void h_glDrawArrays(BridgeCtrl *C, uint8_t *D)
 
   glDrawArrays(mode, first, count);
 
-#ifdef DEBUG_VERBOSE
+#if defined(DEBUG_VERBOSE) && defined(DEBUG_DRAW_PROBE)
   GLint pack_pbo = 0;
   glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &pack_pbo);
   if (fb == 1 && prog == 27 && !pack_pbo &&
@@ -1893,7 +2075,6 @@ void h_glDrawElements(BridgeCtrl *C, uint8_t *D)
 #endif
 
   GLint prev_array_buffer = 0;
-  glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
   bool restoreArrayBuffer = false;
 
   for (int i = 0; i < MAX_VERTEX_ATTRIBS; i++)
@@ -1902,6 +2083,8 @@ void h_glDrawElements(BridgeCtrl *C, uint8_t *D)
     if (!a || !a->enabled || a->vbo != 0)
       continue;
 
+    if (!restoreArrayBuffer)
+      glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
     restoreArrayBuffer = true;
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 

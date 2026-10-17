@@ -7,6 +7,16 @@
 #include "bridge_config.h"
 #include "shared_util.h"
 
+typedef struct
+{
+  int loaded;
+  long ring_slots;
+  long async_swap;
+  long spin_us;
+  long fast_client_wait;
+} BridgeConfig;
+
+static BridgeConfig g_cfg;
 static uint32_t g_ring_slots = 0; /* 0 == not yet loaded */
 
 static int is_pow2(uint32_t v)
@@ -28,15 +38,20 @@ static uint32_t round_up_pow2(uint32_t v)
 }
 
 /* Minimal "key=value" parser. Ignores blank lines and lines starting with
- * '#'. Only "ring_slots" is currently recognised. */
-static uint32_t read_config_file(void)
+ * '#'. Unknown keys are ignored, missing keys keep their defaults. */
+static void read_config_file(void)
 {
+  g_cfg.ring_slots = BRIDGE_RING_SLOTS_DEFAULT;
+  g_cfg.async_swap = BRIDGE_ASYNC_SWAP_DEFAULT;
+  g_cfg.spin_us = BRIDGE_SPIN_US_DEFAULT;
+  g_cfg.fast_client_wait = BRIDGE_FAST_CLIENT_WAIT_DEFAULT;
+  g_cfg.loaded = 1;
+
   FILE *f = fopen(BRIDGE_CONFIG_PATH, "r");
   if (!f)
   {
-    log_console("bridge_config: %s not found, creating with default "
-                "ring_slots=%u",
-                BRIDGE_CONFIG_PATH, BRIDGE_RING_SLOTS_DEFAULT);
+    log_console("bridge_config: %s not found, creating with defaults",
+                BRIDGE_CONFIG_PATH);
 
     FILE *out = fopen(BRIDGE_CONFIG_PATH, "w");
     if (out)
@@ -44,8 +59,19 @@ static uint32_t read_config_file(void)
       fprintf(out,
               "# proxy configuration\n"
               "# ring_slots must be a power of two\n"
-              "ring_slots=%u\n",
-              BRIDGE_RING_SLOTS_DEFAULT);
+              "ring_slots=%u\n"
+              "# 1 = eglSwapBuffers returns without waiting for the proxy to\n"
+              "# present (at most one frame)\n"
+              "async_swap=%u\n"
+              "# microseconds to busy-wait before sleeping on an eventfd\n"
+              "# (0 = always sleep)\n"
+              "spin_us=%u\n"
+              "# 1 = glClientWaitSync only waits for the proxy to issue the\n"
+              "# fence. Faster, but unsafe for\n"
+              "# apps that rewrite persistently mapped buffers.\n"
+              "fast_client_wait=%u\n",
+              BRIDGE_RING_SLOTS_DEFAULT, BRIDGE_ASYNC_SWAP_DEFAULT,
+              BRIDGE_SPIN_US_DEFAULT, BRIDGE_FAST_CLIENT_WAIT_DEFAULT);
       fclose(out);
     }
     else
@@ -54,10 +80,9 @@ static uint32_t read_config_file(void)
                 strerror(errno));
     }
 
-    return BRIDGE_RING_SLOTS_DEFAULT;
+    return;
   }
 
-  uint32_t slots = BRIDGE_RING_SLOTS_DEFAULT;
   char line[256];
 
   while (fgets(line, sizeof(line), f))
@@ -84,31 +109,44 @@ static uint32_t read_config_file(void)
     while (isspace((unsigned char)*kp))
       kp++;
 
-    if (strcmp(kp, "ring_slots") != 0)
-      continue;
-
-    if (val <= 0)
+    if (strcmp(kp, "ring_slots") == 0)
     {
-      log_error("bridge_config: ring_slots=%ld in %s is invalid, using "
-                "default %u",
-                val, BRIDGE_CONFIG_PATH, BRIDGE_RING_SLOTS_DEFAULT);
-      slots = BRIDGE_RING_SLOTS_DEFAULT;
+      if (val <= 0)
+      {
+        log_error("bridge_config: ring_slots=%ld in %s is invalid, using "
+                  "default %u",
+                  val, BRIDGE_CONFIG_PATH, BRIDGE_RING_SLOTS_DEFAULT);
+        val = BRIDGE_RING_SLOTS_DEFAULT;
+      }
+      g_cfg.ring_slots = val;
     }
-    else
-    {
-      slots = (uint32_t)val;
-    }
-    break;
+    else if (strcmp(kp, "async_swap") == 0)
+      g_cfg.async_swap = val != 0;
+    else if (strcmp(kp, "spin_us") == 0)
+      g_cfg.spin_us = val < 0 ? 0 : val > 10000 ? 10000 : val;
+    else if (strcmp(kp, "fast_client_wait") == 0)
+      g_cfg.fast_client_wait = val != 0;
   }
 
   fclose(f);
+}
 
-  return slots;
+static void ensure_loaded(void)
+{
+  if (g_cfg.loaded)
+    return;
+
+  read_config_file();
+
+  log_always("bridge_config: async_swap=%ld spin_us=%ld fast_client_wait=%ld",
+             g_cfg.async_swap, g_cfg.spin_us, g_cfg.fast_client_wait);
 }
 
 static uint32_t load_ring_slots(void)
 {
-  uint32_t slots = read_config_file();
+  ensure_loaded();
+
+  uint32_t slots = (uint32_t)g_cfg.ring_slots;
 
   if (slots < BRIDGE_RING_SLOTS_MIN || slots > BRIDGE_RING_SLOTS_MAX)
   {
@@ -145,4 +183,22 @@ uint32_t bridge_config_ring_slots(void)
 uint32_t bridge_config_ring_mask(void)
 {
   return bridge_config_ring_slots() - 1u;
+}
+
+int bridge_config_async_swap(void)
+{
+  ensure_loaded();
+  return (int)g_cfg.async_swap;
+}
+
+uint32_t bridge_config_spin_us(void)
+{
+  ensure_loaded();
+  return (uint32_t)g_cfg.spin_us;
+}
+
+int bridge_config_fast_client_wait(void)
+{
+  ensure_loaded();
+  return (int)g_cfg.fast_client_wait;
 }

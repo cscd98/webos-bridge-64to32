@@ -113,6 +113,54 @@ static void dump_opcode_stats_window(void)
 }
 #endif
 
+#ifdef DEBUG_FRAMETIME
+/* Per-opcode handler time within the current frame */
+static uint64_t g_ft_op_ns[OP_MAX];
+static uint32_t g_ft_op_cnt[OP_MAX];
+static uint64_t g_ft_frame_no = 0;
+
+/* Proxy frames busier than this get an opcode breakdown */
+#define FT_PROFILE_BUSY_NS (20u * 1000000u)
+#define FT_PROFILE_TOP 10
+
+static void ft_dump_op_profile(uint64_t busy_ns)
+{
+  int top[FT_PROFILE_TOP];
+  int n = 0;
+
+  for (int i = 1; i < OP_MAX; i++)
+  {
+    if (!g_ft_op_cnt[i])
+      continue;
+    /* keep top[] sorted by time, descending */
+    int j;
+    if (n < FT_PROFILE_TOP)
+      j = n++;
+    else if (g_ft_op_ns[i] > g_ft_op_ns[top[n - 1]])
+      j = n - 1;
+    else
+      continue;
+    while (j > 0 && g_ft_op_ns[top[j - 1]] < g_ft_op_ns[i])
+    {
+      top[j] = top[j - 1];
+      j--;
+    }
+    top[j] = i;
+  }
+
+  log_always("[frametime/proxy] busy frame %.2fms, top handlers "
+             "(redundant FBO attaches skipped: %u):",
+             busy_ns / 1e6, g_fbo_attach_skipped);
+  for (int k = 0; k < n; k++)
+  {
+    int op = top[k];
+    log_always("[frametime/proxy]   %-32s %8.2fms  n=%-5u avg=%.1fus",
+               opcode_to_string(op), g_ft_op_ns[op] / 1e6, g_ft_op_cnt[op],
+               g_ft_op_ns[op] / 1e3 / g_ft_op_cnt[op]);
+  }
+}
+#endif
+
 /* ══════════════════════════════════════════════════════════════════════════
  * Dispatch table — indexed by GLBridgeOpcode
  * ══════════════════════════════════════════════════════════════════════════ */
@@ -642,6 +690,10 @@ static void *wl_dispatch_thread(void *arg)
 #endif
       wl_dispatch_table[opc](wl_ctrl, wl_data);
 
+      /* The stub's wl_display_flush() is a no-op, so flush here */
+      if (proxy_wl_display)
+        wl_display_flush(proxy_wl_display);
+
 #ifdef DEBUG_OPCODES
       g_wl_calls_since_roundtrip++;
       if (opc == OP_wl_roundtrip)
@@ -742,32 +794,62 @@ int main(int argc, char **argv)
   memset(&g_proxy_ctx[0], 0, sizeof(GLContextState));
 
   uint64_t completed = 0;
+  const uint64_t spin_ns = (uint64_t)bridge_config_spin_us() * 1000u;
+
+#ifdef DEBUG_FRAMETIME
+  uint64_t ft_idle_ns = 0, ft_swap_ns = 0, ft_frame_start = bridge_now_ns();
+  uint32_t ft_ops = 0;
+#endif
 
   for (;;)
   {
-    atomic_store_explicit(&ring->consumer_waiting, 1, memory_order_seq_cst);
-
     uint64_t published =
         atomic_load_explicit(&ring->published_seq, memory_order_acquire);
 
     if (completed >= published)
     {
-      atomic_store_explicit(&ring->consumer_waiting, 1, memory_order_seq_cst);
-
-      published =
-          atomic_load_explicit(&ring->published_seq, memory_order_acquire);
-      if (completed >= published)
+#ifdef DEBUG_FRAMETIME
+      uint64_t idle_t0 = bridge_now_ns();
+#endif
+      /* Caught up. */
+      if (spin_ns)
       {
-        /* Caught up. Block until the producer publishes */
-        uint64_t val;
-        if (read(req_efd, &val, sizeof(val)) != sizeof(val))
+        uint64_t deadline = bridge_now_ns() + spin_ns;
+        do
         {
-          log_error("eventfd read failed: %s", strerror(errno));
-          break;
-        }
+          for (int i = 0; i < 64 && completed >= published; i++)
+          {
+            bridge_cpu_relax();
+            published = atomic_load_explicit(&ring->published_seq,
+                                             memory_order_acquire);
+          }
+        } while (completed >= published && bridge_now_ns() < deadline);
       }
 
-      atomic_store_explicit(&ring->consumer_waiting, 0, memory_order_seq_cst);
+      if (completed >= published)
+      {
+        atomic_store_explicit(&ring->consumer_waiting, 1,
+                              memory_order_seq_cst);
+
+        published =
+            atomic_load_explicit(&ring->published_seq, memory_order_seq_cst);
+        if (completed >= published)
+        {
+          /* Block until the producer publishes */
+          uint64_t val;
+          if (read(req_efd, &val, sizeof(val)) != sizeof(val))
+          {
+            log_error("eventfd read failed: %s", strerror(errno));
+            break;
+          }
+        }
+
+        atomic_store_explicit(&ring->consumer_waiting, 0,
+                              memory_order_seq_cst);
+      }
+#ifdef DEBUG_FRAMETIME
+      ft_idle_ns += bridge_now_ns() - idle_t0;
+#endif
       continue;
     }
 
@@ -800,15 +882,52 @@ int main(int argc, char **argv)
     }
 #endif
 
+#ifdef DEBUG_FRAMETIME
+    uint64_t op_t0 = bridge_now_ns();
+#endif
+
     if (opc == 0 || opc >= OP_MAX || !dispatch_table[opc])
       log_error("invalid opcode=%u", opc);
     else
       dispatch_table[opc](c, data);
 
+#ifdef DEBUG_FRAMETIME
+    ft_ops++;
+    {
+      uint64_t now = bridge_now_ns();
+      if (opc < OP_MAX)
+      {
+        g_ft_op_ns[opc] += now - op_t0;
+        g_ft_op_cnt[opc]++;
+      }
+    }
+    if (opc == OP_eglSwapBuffers)
+    {
+      uint64_t now = bridge_now_ns();
+      uint64_t frame_ns = now - ft_frame_start;
+      ft_swap_ns = now - op_t0;
+      uint64_t busy = frame_ns - ft_idle_ns - ft_swap_ns;
+      /* busy = GL work (driver CPU time + any GPU stalls) */
+      log_always("[frametime/proxy] %.2fms busy=%.2fms swap=%.2fms "
+                 "idle=%.2fms ops=%u",
+                 frame_ns / 1e6, busy / 1e6, ft_swap_ns / 1e6,
+                 ft_idle_ns / 1e6, ft_ops);
+      /* breakdown for slow frames, plus a sample every 300 frames */
+      if (busy > FT_PROFILE_BUSY_NS || ++g_ft_frame_no % 300 == 0)
+        ft_dump_op_profile(busy);
+      memset(g_ft_op_ns, 0, sizeof(g_ft_op_ns));
+      memset(g_ft_op_cnt, 0, sizeof(g_ft_op_cnt));
+      g_fbo_attach_skipped = 0;
+      ft_frame_start = now;
+      ft_idle_ns = 0;
+      ft_ops = 0;
+    }
+#endif
+
 #ifdef DEBUG_OPCODES
     // record performance stats
     g_opcode_count[opc]++;
-    if (c->needs_response)
+    if (c->needs_response == 1)
       g_opcode_call_count[opc]++;
 
     g_calls_since_swap++;

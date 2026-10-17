@@ -1306,6 +1306,10 @@ static inline char *wl_opcode_to_string(WLBridgeOpcode op)
 #define EGL_BRIDGE_MAX_CONTEXTS 8
 #define EGL_BRIDGE_MAX_SURFACES 16
 
+/* GLsync handles are small IDs allocated by the stub, so glFenceSync does not
+ * need a round trip; the proxy maps each ID to its real GLsync. */
+#define BRIDGE_MAX_SYNCS 256
+
 #define IDX_MODE_POINTER 0
 #define IDX_MODE_OFFSET 1
 #define IDX_MODE_COPIED 2

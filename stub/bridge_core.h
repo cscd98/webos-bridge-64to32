@@ -12,6 +12,7 @@ void bridge_data_read(void *dst, uint32_t offset, size_t size);
 uint8_t *bridge_data_ptr(uint32_t offset);
 void bridge_send_void(void);
 uint64_t bridge_send_call(void);
+uint64_t bridge_send_swap(void);
 BridgeCtrl *bridge_ctrl(void);
 
 /*

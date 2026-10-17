@@ -843,6 +843,10 @@ void h_eglCreateContext(BridgeCtrl *C, uint8_t *D)
   }
 #endif
 
+  /* a reused index must not inherit the old context's FBO state */
+  if (xi)
+    fbo_cache_reset_ctx(xi);
+
   C->result = xi;
   (void)D;
 }

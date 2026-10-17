@@ -68,6 +68,10 @@ DEBUG_EGL_GETPROC ?= 0
 DEBUG_WAYLAND ?= 0
 DEBUG_WAYLAND_VERBOSE ?= 0
 DEBUG_ABORT_ON_GL_ERROR ?= 0
+# Per-draw glReadPixels / vertex readback probes (stalls the GPU every draw)
+DEBUG_DRAW_PROBE ?= 0
+# Per-frame timing log at every eglSwapBuffers (stub and proxy side)
+DEBUG_FRAMETIME ?= 0
 
 ifeq ($(DEBUG),0)
   STRIP_64_CMD = $(CC_64_PATH)/aarch64-webos-linux-gnu-strip --strip-unneeded
@@ -193,6 +197,16 @@ endif
 ifeq ($(DEBUG_WAYLAND_VERBOSE),1)
   CFLAGS_64_BASE += -DDEBUG_WAYLAND_VERBOSE
   CFLAGS_32 += -DDEBUG_WAYLAND_VERBOSE
+endif
+
+ifeq ($(DEBUG_DRAW_PROBE),1)
+  CFLAGS_64_BASE += -DDEBUG_DRAW_PROBE
+  CFLAGS_32 += -DDEBUG_DRAW_PROBE
+endif
+
+ifeq ($(DEBUG_FRAMETIME),1)
+  CFLAGS_64_BASE += -DDEBUG_FRAMETIME
+  CFLAGS_32 += -DDEBUG_FRAMETIME
 endif
 
 ifeq ($(DEBUG_ABORT_ON_GL_ERROR),1)

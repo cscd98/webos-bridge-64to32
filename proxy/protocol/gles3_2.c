@@ -9,22 +9,22 @@
 #include <unistd.h>
 #endif
 
-/* Dolphin alone keeps 16 fences per stream buffer, across 4 buffers */
-#define MAX_SYNCS 256
+#define MAX_SYNCS BRIDGE_MAX_SYNCS
 MapEntry maps[MAX_MAPS];
 static SyncEntry syncs[MAX_SYNCS];
 
-static uint32_t alloc_sync(GLsync s)
+static void store_sync(uint32_t id, GLsync s)
 {
-  for (uint32_t i = 1; i < MAX_SYNCS; i++)
+  if (id == 0 || id >= MAX_SYNCS)
   {
-    if (!syncs[i].real)
-    {
-      syncs[i].real = s;
-      return i;
-    }
+    log_error("store_sync: invalid sync id %u", id);
+    if (s)
+      glDeleteSync(s);
+    return;
   }
-  return 0;
+  if (syncs[id].real)
+    glDeleteSync(syncs[id].real);
+  syncs[id].real = s;
 }
 
 static GLsync lookup_sync(uint32_t id)
@@ -646,13 +646,11 @@ void h_glFenceSync(BridgeCtrl *C, uint8_t *D)
   (void)D;
   AR(r);
 
+  uint32_t id = ar_u32(&r);
   GLenum condition = ar_u32(&r);
   GLbitfield flags = ar_u32(&r);
 
-  GLsync s = glFenceSync(condition, flags);
-  uint32_t id = alloc_sync(s);
-
-  C->result = id;
+  store_sync(id, glFenceSync(condition, flags));
 }
 
 void h_glClientWaitSync(BridgeCtrl *C, uint8_t *D)
@@ -1921,6 +1919,7 @@ void h_glFramebufferTextureLayer(BridgeCtrl *C, uint8_t *D)
 #endif
 
   glFramebufferTextureLayer(target, attachment, texture, level, layer);
+  fbo_cache_invalidate_attachment(target, attachment);
 
 #ifdef DEBUG_VERBOSE
   GLint att_name = 0;
@@ -2393,6 +2392,7 @@ void h_glFramebufferTexture(BridgeCtrl *C, uint8_t *D)
   GLint level = ar_i32(&r);
 
   glFramebufferTexture(target, attachment, texture, level);
+  fbo_cache_invalidate_attachment(target, attachment);
 
   C->result = 0;
   C->result_buf_len = 0;
@@ -2593,7 +2593,7 @@ void h_glTexStorage3DMultisample(BridgeCtrl *C, uint8_t *D)
   C->result_buf_len = 0;
 }
 
-#ifdef DEBUG_VERBOSE
+#if defined(DEBUG_VERBOSE) && defined(DEBUG_DRAW_PROBE)
 /* Decode the attrib-0 vertices a draw will fetch straight from the real
  * mapped EBO/VBO, to check the piggybacked data is what the GPU reads. */
 static void log_draw_vertices(VAOState *vao, GLsizei count, GLenum type,
@@ -2803,7 +2803,6 @@ void h_glDrawElementsBaseVertex(BridgeCtrl *C, uint8_t *D)
 #endif
 
   GLint prev_array_buffer = 0;
-  glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
   bool touched_array_buffer = false;
 
   // Rebuild client-array attribs only (vbo==0).
@@ -2819,6 +2818,8 @@ void h_glDrawElementsBaseVertex(BridgeCtrl *C, uint8_t *D)
     if (a->vbo != 0)
       continue;
 
+    if (!touched_array_buffer)
+      glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prev_array_buffer);
     touched_array_buffer = true;
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -2847,7 +2848,7 @@ void h_glDrawElementsBaseVertex(BridgeCtrl *C, uint8_t *D)
     log_console("h_glDrawElementsBaseVertex: ebo mode");
 #endif
     const void *indices = (const void *)(uintptr_t)indices_raw;
-#ifdef DEBUG_VERBOSE
+#if defined(DEBUG_VERBOSE) && defined(DEBUG_DRAW_PROBE)
     log_draw_vertices(vao, count, type, indices_raw, basevertex);
 #endif
     glDrawElementsBaseVertex(mode, count, type, indices, basevertex);
@@ -2876,9 +2877,10 @@ void h_glDrawElementsBaseVertex(BridgeCtrl *C, uint8_t *D)
 
 #endif
 
-#ifdef DEBUG_VERBOSE
+#if defined(DEBUG_VERBOSE) && defined(DEBUG_DRAW_PROBE)
   /* Only probe a readable target: a surfaceless context has no default
-   * framebuffer, and a bound pack buffer would take the pixel instead. */
+   * framebuffer, and a bound pack buffer would take the pixel instead.
+   * glReadPixels waits for the GPU after every draw, hence its own flag. */
   GLint pack_pbo = 0;
   glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &pack_pbo);
   if (!pack_pbo &&

@@ -32,6 +32,13 @@ void h_glGenFramebuffers(BridgeCtrl *C, uint8_t *D);
 void h_glDeleteFramebuffers(BridgeCtrl *C, uint8_t *D);
 void h_glBindFramebuffer(BridgeCtrl *C, uint8_t *D);
 void h_glFramebufferTexture2D(BridgeCtrl *C, uint8_t *D);
+
+/* FBO attachment cache (gles2.c) */
+void fbo_cache_reset_ctx(uint32_t ctx);
+void fbo_cache_invalidate_attachment(uint32_t target, uint32_t attachment);
+#ifdef DEBUG_FRAMETIME
+extern uint32_t g_fbo_attach_skipped;
+#endif
 void h_glFramebufferRenderbuffer(BridgeCtrl *C, uint8_t *D);
 void h_glCheckFramebufferStatus(BridgeCtrl *C, uint8_t *D);
 void h_glGetFramebufferAttachmentParameteriv(BridgeCtrl *C, uint8_t *D);

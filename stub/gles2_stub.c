@@ -1289,7 +1289,7 @@ GL_APICALL void GL_APIENTRY glDeleteRenderbuffers(GLsizei n, const GLuint *rbs)
 
   C->args_len = W.pos;
 
-  BRIDGE_SEND_CALL();
+  BRIDGE_SEND_VOID();
 }
 
 GL_APICALL void GL_APIENTRY glBindRenderbuffer(GLenum target,

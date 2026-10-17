@@ -976,7 +976,10 @@ static void _deliver_input_events(void)
   }
 }
 
-void _bridge_dispatch(void)
+/* roundtrip=1 only for wl_display_roundtrip(); every other dispatch variant
+ * just collects whatever events the proxy has already received, instead of
+ * waiting a full round trip on the compositor every frame. */
+void _bridge_dispatch(int roundtrip)
 {
   _fire_globals();
 
@@ -1018,7 +1021,9 @@ void _bridge_dispatch(void)
   BRIDGE_BEGIN_WL();
 
   BRIDGE_CTRL_WL()->opcode = OP_wl_roundtrip;
-  BRIDGE_CTRL_WL()->args_len = 0;
+  ArgWriter W = aw_init(BRIDGE_CTRL_WL()->args, BRIDGE_ARGS_SIZE);
+  aw_u32(&W, roundtrip ? 1u : 0u);
+  BRIDGE_CTRL_WL()->args_len = W.pos;
   BRIDGE_CTRL_WL()->data_offset = 0;
   BRIDGE_CTRL_WL()->data_size = 0;
 
@@ -1261,7 +1266,8 @@ int wl_display_dispatch(struct wl_display *dpy)
 
   if (!IS_BRIDGE_DPY(dpy))
     return REAL(wl_display_dispatch)(dpy);
-  _bridge_dispatch();
+  /* blocking variant: keep a real round trip */
+  _bridge_dispatch(1);
   return 0;
 }
 
@@ -1269,7 +1275,7 @@ int wl_display_dispatch_pending(struct wl_display *dpy)
 {
   if (!IS_BRIDGE_DPY(dpy))
     return REAL(wl_display_dispatch_pending)(dpy);
-  _bridge_dispatch();
+  _bridge_dispatch(0);
   return 0;
 }
 
@@ -1277,7 +1283,8 @@ int wl_display_dispatch_queue(struct wl_display *dpy, struct wl_event_queue *q)
 {
   if (!IS_BRIDGE_DPY(dpy))
     return REAL(wl_display_dispatch_queue)(dpy, q);
-  _bridge_dispatch();
+  /* blocking variant: keep a real round trip */
+  _bridge_dispatch(1);
   return 0;
 }
 
@@ -1286,7 +1293,7 @@ int wl_display_dispatch_queue_pending(struct wl_display *dpy,
 {
   if (!IS_BRIDGE_DPY(dpy))
     return REAL(wl_display_dispatch_queue_pending)(dpy, q);
-  _bridge_dispatch();
+  _bridge_dispatch(0);
   return 0;
 }
 
@@ -1294,7 +1301,7 @@ int wl_display_roundtrip(struct wl_display *dpy)
 {
   if (!IS_BRIDGE_DPY(dpy))
     return REAL(wl_display_roundtrip)(dpy);
-  _bridge_dispatch();
+  _bridge_dispatch(1);
   return 0;
 }
 
@@ -1302,10 +1309,7 @@ int wl_display_flush(struct wl_display *dpy)
 {
   if (!IS_BRIDGE_DPY(dpy))
     return REAL(wl_display_flush)(dpy);
-  BRIDGE_BEGIN_WL();
-  BRIDGE_CTRL_WL()->opcode = OP_wl_flush;
-  BRIDGE_CTRL_WL()->args_len = 0;
-  bridge_send_void_wl();
+  /* No IPC: the proxy flushes after every WL request it handles */
   return 0;
 }
 
@@ -1334,7 +1338,7 @@ int wl_display_read_events(struct wl_display *dpy)
 {
   if (!IS_BRIDGE_DPY(dpy))
     return REAL(wl_display_read_events)(dpy);
-  _bridge_dispatch();
+  _bridge_dispatch(0);
   return 0;
 }
 

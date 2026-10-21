@@ -1925,7 +1925,7 @@ GL_APICALL void GL_APIENTRY glGetActiveUniform(GLuint program, GLuint index,
   if (type)
     *type = (GLenum)(C->result >> 32);
   if (length)
-    *length = *(GLsizei *)C->result_buf;
+    *length = *(GLsizei *)GL_RESULT(C);
   if (name)
     bridge_data_read(name, out, name_buf_sz);
 }
@@ -2173,7 +2173,7 @@ GL_APICALL void GL_APIENTRY glGetActiveAttrib(GLuint program, GLuint index,
   if (type)
     *type = (GLenum)(C->result >> 32);
   if (length)
-    *length = *(GLsizei *)C->result_buf;
+    *length = *(GLsizei *)GL_RESULT(C);
   bridge_data_read(name, out, (size_t)bufSize);
 }
 
@@ -3367,7 +3367,7 @@ GL_APICALL const GLubyte *GL_APIENTRY glGetString(GLenum name)
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  const char *src = (const char *)C2->result_buf;
+  const char *src = (const char *)GL_RESULT(C2);
 
   if (idx >= 0)
   {

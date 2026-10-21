@@ -1,3 +1,4 @@
+*.log
 out/
 include/webos-shell-32.h
 include/webos-shell.h

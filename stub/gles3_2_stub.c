@@ -57,7 +57,7 @@ GL_APICALL void GL_APIENTRY glGenVertexArrays(GLsizei n, GLuint *arrays)
 
   BRIDGE_SEND_CALL();
 
-  memcpy(arrays, C->result_buf, n * sizeof(GLuint));
+  memcpy(arrays, GL_RESULT(C), n * sizeof(GLuint));
 
   GLContextState *ctx = &g_stub_ctx[g_stub_current_ctx];
 
@@ -160,7 +160,7 @@ GL_APICALL void GL_APIENTRY glGenQueries(GLsizei n, GLuint *ids)
 
   BRIDGE_SEND_CALL();
 
-  memcpy(ids, C->result_buf, n * sizeof(GLuint));
+  memcpy(ids, GL_RESULT(C), n * sizeof(GLuint));
 }
 
 GL_APICALL void GL_APIENTRY glDeleteQueries(GLsizei n, const GLuint *ids)
@@ -1042,7 +1042,7 @@ GL_APICALL const GLubyte *GL_APIENTRY glGetStringi(GLenum name, GLuint index)
 
   /* Proxy writes null‑terminated string into result_buf */
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  return (const GLubyte *)C2->result_buf;
+  return (const GLubyte *)GL_RESULT(C2);
 }
 
 GL_APICALL void GL_APIENTRY glGetInteger64v(GLenum pname, GLint64 *data)
@@ -1060,7 +1060,7 @@ GL_APICALL void GL_APIENTRY glGetInteger64v(GLenum pname, GLint64 *data)
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
   if (C2->result_buf_len >= sizeof(GLint64))
-    memcpy(data, C2->result_buf, sizeof(GLint64));
+    memcpy(data, GL_RESULT(C2), sizeof(GLint64));
   else
     *data = 0;
 }
@@ -1110,7 +1110,7 @@ GL_APICALL void GL_APIENTRY glGetBooleani_v(GLenum target, GLuint index,
   BridgeCtrl *C2 = BRIDGE_CTRL();
 
   if (C2->result_buf_len >= sizeof(GLboolean))
-    memcpy(data, C2->result_buf, sizeof(GLboolean));
+    memcpy(data, GL_RESULT(C2), sizeof(GLboolean));
 }
 
 GL_APICALL void GL_APIENTRY glVertexAttribI4i(GLuint index, GLint x, GLint y,
@@ -1221,7 +1221,7 @@ GL_APICALL void GL_APIENTRY glGetTransformFeedbackVarying(
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader R = ar_init(C2->result_buf, BRIDGE_RESULT_SIZE);
+  ArgReader R = ar_init(GL_RESULT(C2), BRIDGE_RESULT_SIZE);
 
   GLsizei outLen = ar_i32(&R);
   GLsizei outSize = ar_i32(&R);
@@ -1239,7 +1239,7 @@ GL_APICALL void GL_APIENTRY glGetTransformFeedbackVarying(
     size_t copy = (size_t)bufSize;
     if (copy > (size_t)outLen + 1)
       copy = (size_t)outLen + 1;
-    memcpy(name, C2->result_buf + R.pos, copy);
+    memcpy(name, GL_RESULT(C2) + R.pos, copy);
   }
 }
 
@@ -1261,7 +1261,7 @@ GL_APICALL void GL_APIENTRY glGetUniformuiv(GLuint program, GLint location,
 
   BRIDGE_SEND_CALL();
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(params, C2->result_buf, sizeof(GLuint));
+  memcpy(params, GL_RESULT(C2), sizeof(GLuint));
 }
 
 GL_APICALL void GL_APIENTRY glUniform1ui(GLint location, GLuint v0)
@@ -1572,7 +1572,7 @@ GL_APICALL void GL_APIENTRY glGetTexParameterIiv(GLenum target, GLenum pname,
 
   BRIDGE_SEND_CALL();
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(params, C2->result_buf, sizeof(GLint));
+  memcpy(params, GL_RESULT(C2), sizeof(GLint));
 }
 
 GL_APICALL void GL_APIENTRY glGetTexParameterIuiv(GLenum target, GLenum pname,
@@ -1591,7 +1591,7 @@ GL_APICALL void GL_APIENTRY glGetTexParameterIuiv(GLenum target, GLenum pname,
 
   BRIDGE_SEND_CALL();
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(params, C2->result_buf, sizeof(GLuint));
+  memcpy(params, GL_RESULT(C2), sizeof(GLuint));
 }
 
 GL_APICALL void GL_APIENTRY glTexParameterIiv(GLenum target, GLenum pname,
@@ -1653,7 +1653,7 @@ GL_APICALL void GL_APIENTRY glGetVertexAttribIiv(GLuint index, GLenum pname,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(params, C2->result_buf, sizeof(GLint));
+  memcpy(params, GL_RESULT(C2), sizeof(GLint));
 }
 
 GL_APICALL void GL_APIENTRY glGetVertexAttribIuiv(GLuint index, GLenum pname,
@@ -1673,7 +1673,7 @@ GL_APICALL void GL_APIENTRY glGetVertexAttribIuiv(GLuint index, GLenum pname,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(params, C2->result_buf, sizeof(GLuint));
+  memcpy(params, GL_RESULT(C2), sizeof(GLuint));
 }
 
 GL_APICALL void GL_APIENTRY glGetQueryiv(GLenum target, GLenum pname,
@@ -1693,7 +1693,7 @@ GL_APICALL void GL_APIENTRY glGetQueryiv(GLenum target, GLenum pname,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(params, C2->result_buf, sizeof(GLint));
+  memcpy(params, GL_RESULT(C2), sizeof(GLint));
 }
 
 GL_APICALL void GL_APIENTRY glGetQueryObjectuiv(GLuint id, GLenum pname,
@@ -1713,7 +1713,7 @@ GL_APICALL void GL_APIENTRY glGetQueryObjectuiv(GLuint id, GLenum pname,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(params, C2->result_buf, sizeof(GLuint));
+  memcpy(params, GL_RESULT(C2), sizeof(GLuint));
 }
 
 GL_APICALL GLboolean GL_APIENTRY glIsQuery(GLuint id)
@@ -1875,7 +1875,7 @@ GL_APICALL void GL_APIENTRY glGetBufferPointerv(GLenum target, GLenum pname,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader R = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader R = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   uintptr_t ptr = (uintptr_t)ar_u64(&R);
   *params = (void *)ptr;
@@ -1894,7 +1894,7 @@ GL_APICALL void GL_APIENTRY glGenSamplers(GLsizei count, GLuint *samplers)
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(samplers, C2->result_buf, count * sizeof(GLuint));
+  memcpy(samplers, GL_RESULT(C2), count * sizeof(GLuint));
 }
 
 GL_APICALL void GL_APIENTRY glDeleteSamplers(GLsizei count,
@@ -2002,7 +2002,7 @@ GL_APICALL void GL_APIENTRY glGetSamplerParameteriv(GLuint sampler,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(params, C2->result_buf, 4 * sizeof(GLint));
+  memcpy(params, GL_RESULT(C2), 4 * sizeof(GLint));
 }
 
 GL_APICALL void GL_APIENTRY glGetSamplerParameterfv(GLuint sampler,
@@ -2021,7 +2021,7 @@ GL_APICALL void GL_APIENTRY glGetSamplerParameterfv(GLuint sampler,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(params, C2->result_buf, 4 * sizeof(GLfloat));
+  memcpy(params, GL_RESULT(C2), 4 * sizeof(GLfloat));
 }
 
 GL_APICALL GLboolean GL_APIENTRY glIsSampler(GLuint sampler)
@@ -2089,14 +2089,14 @@ GL_APICALL void GL_APIENTRY glGetSynciv(GLsync sync, GLenum pname,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader R = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader R = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   GLsizei outLen = ar_i32(&R);
   if (length)
     *length = outLen;
 
   if (values && outLen > 0)
-    memcpy(values, C2->result_buf + sizeof(GLsizei), outLen * sizeof(GLint));
+    memcpy(values, GL_RESULT(C2) + sizeof(GLsizei), outLen * sizeof(GLint));
 }
 
 GL_APICALL void GL_APIENTRY glBeginTransformFeedback(GLenum primitiveMode)
@@ -2283,7 +2283,7 @@ GL_APICALL void GL_APIENTRY glGenTransformFeedbacks(GLsizei n, GLuint *ids)
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(ids, C2->result_buf, n * sizeof(GLuint));
+  memcpy(ids, GL_RESULT(C2), n * sizeof(GLuint));
 }
 
 GL_APICALL void GL_APIENTRY glDeleteTransformFeedbacks(GLsizei n,
@@ -2442,7 +2442,7 @@ glGetUniformIndices(GLuint program, GLsizei uniformCount,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(uniformIndices, C2->result_buf, uniformCount * sizeof(GLuint));
+  memcpy(uniformIndices, GL_RESULT(C2), uniformCount * sizeof(GLuint));
 }
 
 GL_APICALL void GL_APIENTRY glGetActiveUniformsiv(GLuint program,
@@ -2467,7 +2467,7 @@ GL_APICALL void GL_APIENTRY glGetActiveUniformsiv(GLuint program,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(params, C2->result_buf, uniformCount * sizeof(GLint));
+  memcpy(params, GL_RESULT(C2), uniformCount * sizeof(GLint));
 }
 
 GL_APICALL void GL_APIENTRY glGetActiveUniformBlockiv(GLuint program,
@@ -2488,7 +2488,7 @@ GL_APICALL void GL_APIENTRY glGetActiveUniformBlockiv(GLuint program,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(params, C2->result_buf, sizeof(GLint));
+  memcpy(params, GL_RESULT(C2), sizeof(GLint));
 }
 
 GL_APICALL void GL_APIENTRY glGetActiveUniformBlockName(GLuint program,
@@ -2510,13 +2510,13 @@ GL_APICALL void GL_APIENTRY glGetActiveUniformBlockName(GLuint program,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   GLsizei len = ar_i32(&r);
   if (length)
     *length = len;
 
-  memcpy(blockName, C2->result_buf + sizeof(GLsizei), len);
+  memcpy(blockName, GL_RESULT(C2) + sizeof(GLsizei), len);
 }
 
 GL_APICALL void GL_APIENTRY glBindImageTexture(GLuint unit, GLuint texture,
@@ -2600,7 +2600,7 @@ GL_APICALL void GL_APIENTRY glGetPointerv(GLenum pname, void **params)
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   uintptr_t ptr = (uintptr_t)ar_u64(&r);
   *params = (void *)ptr;
@@ -2647,7 +2647,7 @@ GL_APICALL void GL_APIENTRY glGetProgramBinary(GLuint program, GLsizei bufSize,
 
   /* result_buf now carries only the two small scalars (8 bytes) */
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
   GLsizei len = ar_i32(&r);
   GLenum fmt = ar_u32(&r);
 
@@ -2815,7 +2815,7 @@ GL_APICALL void GL_APIENTRY glGetBufferParameteri64v(GLenum target,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   *params = (GLint64)ar_u64(&r);
 }
@@ -2835,7 +2835,7 @@ GL_APICALL void GL_APIENTRY glGetInteger64i_v(GLenum target, GLuint index,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   *data = (GLint64)ar_u64(&r);
 }
@@ -2878,7 +2878,7 @@ GL_APICALL void GL_APIENTRY glGetInternalformativ(GLenum target,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   for (int i = 0; i < bufSize; i++)
     params[i] = ar_i32(&r);
@@ -2899,7 +2899,7 @@ GL_APICALL void GL_APIENTRY glGetIntegeri_v(GLenum target, GLuint index,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   *data = ar_i32(&r);
 }
@@ -2920,7 +2920,7 @@ GL_APICALL void GL_APIENTRY glGetSamplerParameterIiv(GLuint sampler,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   params[0] = ar_i32(&r);
   params[1] = ar_i32(&r);
@@ -2944,7 +2944,7 @@ GL_APICALL void GL_APIENTRY glGetSamplerParameterIuiv(GLuint sampler,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   params[0] = ar_u32(&r);
   params[1] = ar_u32(&r);
@@ -3369,7 +3369,7 @@ GL_APICALL GLuint GL_APIENTRY glGetDebugMessageLog(
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   GLuint num = ar_u32(&r);
 
@@ -3394,7 +3394,7 @@ GL_APICALL GLuint GL_APIENTRY glGetDebugMessageLog(
 
     if (messageLog && len > 0)
     {
-      memcpy(messageLog, C2->result_buf + r.pos, len);
+      memcpy(messageLog, GL_RESULT(C2) + r.pos, len);
       messageLog += len;
     }
 
@@ -3421,14 +3421,14 @@ GL_APICALL void GL_APIENTRY glGetObjectLabel(GLenum identifier, GLuint name,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   GLsizei len = ar_i32(&r);
   if (length)
     *length = len;
 
   if (label && len > 0)
-    memcpy(label, C2->result_buf + sizeof(GLsizei), len);
+    memcpy(label, GL_RESULT(C2) + sizeof(GLsizei), len);
 }
 
 GL_APICALL void GL_APIENTRY glGetObjectPtrLabel(const void *ptr,
@@ -3447,14 +3447,14 @@ GL_APICALL void GL_APIENTRY glGetObjectPtrLabel(const void *ptr,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   GLsizei len = ar_i32(&r);
   if (length)
     *length = len;
 
   if (label && len > 0)
-    memcpy(label, C2->result_buf + sizeof(GLsizei), len);
+    memcpy(label, GL_RESULT(C2) + sizeof(GLsizei), len);
 }
 
 GL_APICALL void GL_APIENTRY glObjectLabel(GLenum identifier, GLuint name,
@@ -3741,7 +3741,7 @@ GL_APICALL void GL_APIENTRY glGenProgramPipelines(GLsizei n, GLuint *pipelines)
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   for (int i = 0; i < n; i++)
     pipelines[i] = ar_u32(&r);
@@ -3778,7 +3778,7 @@ GL_APICALL GLboolean GL_APIENTRY glIsProgramPipeline(GLuint pipeline)
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   return (GLboolean)ar_u32(&r);
 }
@@ -3973,7 +3973,7 @@ GL_APICALL void GL_APIENTRY glGetProgramInterfaceiv(GLuint program,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
   *params = ar_i32(&r);
 }
 
@@ -4009,7 +4009,7 @@ GL_APICALL GLuint GL_APIENTRY glGetProgramResourceIndex(GLuint program,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
   return ar_u32(&r);
 }
 
@@ -4033,10 +4033,10 @@ GL_APICALL void GL_APIENTRY glGetProgramResourceName(GLuint program,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   *length = ar_i32(&r);
-  memcpy(name, C2->result_buf + sizeof(GLsizei), *length);
+  memcpy(name, GL_RESULT(C2) + sizeof(GLsizei), *length);
 }
 
 GL_APICALL void GL_APIENTRY glGetProgramResourceiv(
@@ -4070,7 +4070,7 @@ GL_APICALL void GL_APIENTRY glGetProgramResourceiv(
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   GLsizei outLen = ar_i32(&r);
   if (length)
@@ -4107,7 +4107,7 @@ GL_APICALL GLint GL_APIENTRY glGetProgramResourceLocation(GLuint program,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
   return ar_i32(&r);
 }
 
@@ -4170,7 +4170,7 @@ glCreateShaderProgramv(GLenum type, GLsizei count, const GLchar *const *strings)
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
   return ar_u32(&r);
 }
 
@@ -4204,10 +4204,10 @@ GL_APICALL void GL_APIENTRY glGetProgramPipelineInfoLog(GLuint pipeline,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
 
   *length = ar_i32(&r);
-  memcpy(infoLog, C2->result_buf + sizeof(GLsizei), *length);
+  memcpy(infoLog, GL_RESULT(C2) + sizeof(GLsizei), *length);
 }
 
 // -----------------------------
@@ -4252,7 +4252,7 @@ GL_APICALL GLenum GL_APIENTRY glGetGraphicsResetStatus(void)
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  ArgReader r = ar_init(C2->result_buf, C2->result_buf_len);
+  ArgReader r = ar_init(GL_RESULT(C2), C2->result_buf_len);
   return ar_u32(&r);
 }
 
@@ -4277,7 +4277,7 @@ GL_APICALL void GL_APIENTRY glReadnPixels(GLint x, GLint y, GLsizei w,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(data, C2->result_buf, bufSize);
+  memcpy(data, GL_RESULT(C2), bufSize);
 }
 
 GL_APICALL void GL_APIENTRY glGetnUniformfv(GLuint program, GLint loc,
@@ -4296,7 +4296,7 @@ GL_APICALL void GL_APIENTRY glGetnUniformfv(GLuint program, GLint loc,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(params, C2->result_buf, bufSize);
+  memcpy(params, GL_RESULT(C2), bufSize);
 }
 
 GL_APICALL void GL_APIENTRY glGetnUniformiv(GLuint program, GLint loc,
@@ -4315,7 +4315,7 @@ GL_APICALL void GL_APIENTRY glGetnUniformiv(GLuint program, GLint loc,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(params, C2->result_buf, bufSize);
+  memcpy(params, GL_RESULT(C2), bufSize);
 }
 
 GL_APICALL void GL_APIENTRY glGetnUniformuiv(GLuint program, GLint loc,
@@ -4334,7 +4334,7 @@ GL_APICALL void GL_APIENTRY glGetnUniformuiv(GLuint program, GLint loc,
   BRIDGE_SEND_CALL();
 
   BridgeCtrl *C2 = BRIDGE_CTRL();
-  memcpy(params, C2->result_buf, bufSize);
+  memcpy(params, GL_RESULT(C2), bufSize);
 }
 
 // -----------------------------

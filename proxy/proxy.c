@@ -42,7 +42,7 @@ static uint64_t g_wl_calls_since_roundtrip = 0;
 #endif
 
 /* ── Shared memory ───────────────────────────────────────────────────────── */
-static BridgeRing *ring = NULL;
+BridgeRing *ring = NULL;
 uint8_t *data = NULL;
 
 static uint32_t g_ring_mask = 0; /* cached at setup_bridge() */

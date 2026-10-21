@@ -317,8 +317,8 @@ void h_eglInitialize(BridgeCtrl *C, uint8_t *D)
   }
 #endif
 
-  ((EGLint *)C->result_buf)[0] = e->major;
-  ((EGLint *)C->result_buf)[1] = e->minor;
+  ((EGLint *)GL_RESULT(C))[0] = e->major;
+  ((EGLint *)GL_RESULT(C))[1] = e->minor;
 
   C->result = ok;
 
@@ -370,12 +370,12 @@ void h_eglQueryString(BridgeCtrl *C, uint8_t *D)
       const char *s = eglQueryString(EGL_NO_DISPLAY, name);
       if (s)
       {
-        strncpy((char *)C->result_buf, s, BRIDGE_RESULT_SIZE - 1);
+        strncpy((char *)GL_RESULT(C), s, BRIDGE_RESULT_SIZE - 1);
         return;
       }
     }
     eglGetError(); // clear global EGL error flag
-    C->result_buf[0] = '\0';
+    GL_RESULT(C)[0] = '\0';
     (void)D;
     return;
   }
@@ -383,9 +383,9 @@ void h_eglQueryString(BridgeCtrl *C, uint8_t *D)
   const char *s = eglQueryString(DISP(di), name);
 
   if (s)
-    strncpy((char *)C->result_buf, s, BRIDGE_RESULT_SIZE - 1);
+    strncpy((char *)GL_RESULT(C), s, BRIDGE_RESULT_SIZE - 1);
   else
-    C->result_buf[0] = '\0';
+    GL_RESULT(C)[0] = '\0';
 #ifdef DEBUG_EGL_GETPROC
   log_console("h_eglQueryString: di=%u name=0x%04x -> \"%s\"", di, name,
               s ? s : "(null)");

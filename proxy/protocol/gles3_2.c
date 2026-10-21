@@ -99,7 +99,7 @@ void h_glGenVertexArrays(BridgeCtrl *C, uint8_t *D)
   GLsizei n = ar_i32(&r);
 
   // Step 1: generate real VAO IDs
-  glGenVertexArrays(n, (GLuint *)C->result_buf);
+  glGenVertexArrays(n, (GLuint *)GL_RESULT(C));
 
 #ifdef DEBUG_VERBOSE
   log_console("h_glGenVertexArrays (tid=%ld): n:%d g_current_ctx:%d vao:%d",
@@ -111,7 +111,7 @@ void h_glGenVertexArrays(BridgeCtrl *C, uint8_t *D)
   C->result_buf_len = n * sizeof(GLuint);
 
   // Step 3: zero-init VAO state for each generated ID
-  GLuint *ids = (GLuint *)C->result_buf;
+  GLuint *ids = (GLuint *)GL_RESULT(C);
 
   GLContextState *ctx = &g_proxy_ctx[g_current_ctx];
 
@@ -243,7 +243,7 @@ void h_glGenQueries(BridgeCtrl *C, uint8_t *D)
 
   GLsizei n = ar_i32(&r);
 
-  glGenQueries(n, (GLuint *)C->result_buf);
+  glGenQueries(n, (GLuint *)GL_RESULT(C));
 
   C->result_buf_len = n * sizeof(GLuint);
 
@@ -1088,12 +1088,12 @@ void h_glGetStringi(BridgeCtrl *C, uint8_t *D)
 
   if (s)
   {
-    strncpy((char *)C->result_buf, (const char *)s, BRIDGE_RESULT_SIZE - 1);
-    C->result_buf[BRIDGE_RESULT_SIZE - 1] = '\0';
+    strncpy((char *)GL_RESULT(C), (const char *)s, BRIDGE_RESULT_SIZE - 1);
+    GL_RESULT(C)[BRIDGE_RESULT_SIZE - 1] = '\0';
   }
   else
   {
-    C->result_buf[0] = '\0';
+    GL_RESULT(C)[0] = '\0';
   }
 
   C->result = 0;
@@ -1109,7 +1109,7 @@ void h_glGetInteger64v(BridgeCtrl *C, uint8_t *D)
   GLint64 value = 0;
   glGetInteger64v(pname, &value);
 
-  memcpy(C->result_buf, &value, sizeof(GLint64));
+  memcpy(GL_RESULT(C), &value, sizeof(GLint64));
   C->result_buf_len = sizeof(GLint64);
   C->result = 0;
 }
@@ -1160,7 +1160,7 @@ void h_glGetBooleani_v(BridgeCtrl *C, uint8_t *D)
 
   pfn(target, index, &value);
 
-  memcpy(C->result_buf, &value, sizeof(value));
+  memcpy(GL_RESULT(C), &value, sizeof(value));
 
   C->result_buf_len = sizeof(value);
 
@@ -1314,11 +1314,11 @@ void h_glGetTransformFeedbackVarying(BridgeCtrl *C, uint8_t *D)
   glGetTransformFeedbackVarying(program, index, bufSize, &length, &size, &type,
                                 tmp);
 
-  ArgWriter W = aw_init(C->result_buf, BRIDGE_RESULT_SIZE);
+  ArgWriter W = aw_init(GL_RESULT(C), BRIDGE_RESULT_SIZE);
   aw_i32(&W, length);
   aw_i32(&W, size);
   aw_u32(&W, type);
-  memcpy(C->result_buf + W.pos, tmp, (size_t)length + 1);
+  memcpy(GL_RESULT(C) + W.pos, tmp, (size_t)length + 1);
 }
 
 /* Uniform*ui* */
@@ -1340,7 +1340,7 @@ void h_glGetUniformuiv(BridgeCtrl *C, uint8_t *D)
   GLint location = ar_i32(&r);
   GLuint v = 0;
   glGetUniformuiv(program, location, &v);
-  memcpy(C->result_buf, &v, sizeof(GLuint));
+  memcpy(GL_RESULT(C), &v, sizeof(GLuint));
   C->result_buf_len = sizeof(GLuint);
 }
 
@@ -1474,7 +1474,7 @@ void h_glGetTexParameterIiv(BridgeCtrl *C, uint8_t *D)
   GLenum pname = ar_u32(&r);
   GLint v = 0;
   glGetTexParameterIiv(target, pname, &v);
-  memcpy(C->result_buf, &v, sizeof(GLint));
+  memcpy(GL_RESULT(C), &v, sizeof(GLint));
 }
 
 void h_glGetTexParameterIuiv(BridgeCtrl *C, uint8_t *D)
@@ -1485,7 +1485,7 @@ void h_glGetTexParameterIuiv(BridgeCtrl *C, uint8_t *D)
   GLenum pname = ar_u32(&r);
   GLuint v = 0;
   glGetTexParameterIuiv(target, pname, &v);
-  memcpy(C->result_buf, &v, sizeof(GLuint));
+  memcpy(GL_RESULT(C), &v, sizeof(GLuint));
 }
 
 void h_glTexParameterIiv(BridgeCtrl *C, uint8_t *D)
@@ -1518,7 +1518,7 @@ void h_glGetVertexAttribIiv(BridgeCtrl *C, uint8_t *D)
   GLint v = 0;
   glGetVertexAttribIiv(index, pname, &v);
 
-  memcpy(C->result_buf, &v, sizeof(GLint));
+  memcpy(GL_RESULT(C), &v, sizeof(GLint));
 }
 
 void h_glGetVertexAttribIuiv(BridgeCtrl *C, uint8_t *D)
@@ -1531,7 +1531,7 @@ void h_glGetVertexAttribIuiv(BridgeCtrl *C, uint8_t *D)
   GLuint v = 0;
   glGetVertexAttribIuiv(index, pname, &v);
 
-  memcpy(C->result_buf, &v, sizeof(GLuint));
+  memcpy(GL_RESULT(C), &v, sizeof(GLuint));
 }
 
 void h_glGetQueryiv(BridgeCtrl *C, uint8_t *D)
@@ -1544,7 +1544,7 @@ void h_glGetQueryiv(BridgeCtrl *C, uint8_t *D)
   GLint v = 0;
   glGetQueryiv(target, pname, &v);
 
-  memcpy(C->result_buf, &v, sizeof(GLint));
+  memcpy(GL_RESULT(C), &v, sizeof(GLint));
 }
 
 void h_glGetQueryObjectuiv(BridgeCtrl *C, uint8_t *D)
@@ -1557,7 +1557,7 @@ void h_glGetQueryObjectuiv(BridgeCtrl *C, uint8_t *D)
   GLuint v = 0;
   glGetQueryObjectuiv(id, pname, &v);
 
-  memcpy(C->result_buf, &v, sizeof(GLuint));
+  memcpy(GL_RESULT(C), &v, sizeof(GLuint));
 }
 
 void h_glIsQuery(BridgeCtrl *C, uint8_t *D)
@@ -1670,7 +1670,7 @@ void h_glGetBufferPointerv(BridgeCtrl *C, uint8_t *D)
   glGetBufferPointerv(target, pname, &ptr);
 
   uint64_t v = (uint64_t)(uintptr_t)ptr;
-  memcpy(C->result_buf, &v, sizeof(uint64_t));
+  memcpy(GL_RESULT(C), &v, sizeof(uint64_t));
   C->result_buf_len = sizeof(uint64_t);
   C->result = 0;
 }
@@ -1685,7 +1685,7 @@ void h_glGenSamplers(BridgeCtrl *C, uint8_t *D)
 
   glGenSamplers(count, tmp);
 
-  memcpy(C->result_buf, tmp, count * sizeof(GLuint));
+  memcpy(GL_RESULT(C), tmp, count * sizeof(GLuint));
 }
 
 void h_glDeleteSamplers(BridgeCtrl *C, uint8_t *D)
@@ -1745,7 +1745,7 @@ void h_glGetSamplerParameteriv(BridgeCtrl *C, uint8_t *D)
 
   glGetSamplerParameteriv(sampler, pname, vals);
 
-  memcpy(C->result_buf, vals, 4 * sizeof(GLint));
+  memcpy(GL_RESULT(C), vals, 4 * sizeof(GLint));
 }
 
 void h_glGetSamplerParameterfv(BridgeCtrl *C, uint8_t *D)
@@ -1759,7 +1759,7 @@ void h_glGetSamplerParameterfv(BridgeCtrl *C, uint8_t *D)
 
   glGetSamplerParameterfv(sampler, pname, vals);
 
-  memcpy(C->result_buf, vals, 4 * sizeof(GLfloat));
+  memcpy(GL_RESULT(C), vals, 4 * sizeof(GLfloat));
 }
 
 void h_glIsSampler(BridgeCtrl *C, uint8_t *D)
@@ -1813,8 +1813,8 @@ void h_glGetSynciv(BridgeCtrl *C, uint8_t *D)
 
   glGetSynciv(s, pname, bufSize, &len, vals);
 
-  memcpy(C->result_buf, &len, sizeof(GLsizei));
-  memcpy(C->result_buf + sizeof(GLsizei), vals, len * sizeof(GLint));
+  memcpy(GL_RESULT(C), &len, sizeof(GLsizei));
+  memcpy(GL_RESULT(C) + sizeof(GLsizei), vals, len * sizeof(GLint));
   C->result_buf_len = sizeof(GLsizei) + len * sizeof(GLint);
 }
 
@@ -1945,7 +1945,7 @@ void h_glGenTransformFeedbacks(BridgeCtrl *C, uint8_t *D)
 
   glGenTransformFeedbacks(n, tmp);
 
-  memcpy(C->result_buf, tmp, n * sizeof(GLuint));
+  memcpy(GL_RESULT(C), tmp, n * sizeof(GLuint));
 }
 
 void h_glDeleteTransformFeedbacks(BridgeCtrl *C, uint8_t *D)
@@ -2042,7 +2042,7 @@ void h_glGetUniformIndices(BridgeCtrl *C, uint8_t *D)
 
   glGetUniformIndices(program, count, names, out);
 
-  memcpy(C->result_buf, out, count * sizeof(GLuint));
+  memcpy(GL_RESULT(C), out, count * sizeof(GLuint));
 }
 
 void h_glGetActiveUniformsiv(BridgeCtrl *C, uint8_t *D)
@@ -2058,7 +2058,7 @@ void h_glGetActiveUniformsiv(BridgeCtrl *C, uint8_t *D)
 
   glGetActiveUniformsiv(program, count, indices, pname, vals);
 
-  memcpy(C->result_buf, vals, count * sizeof(GLint));
+  memcpy(GL_RESULT(C), vals, count * sizeof(GLint));
 }
 
 void h_glGetActiveUniformBlockiv(BridgeCtrl *C, uint8_t *D)
@@ -2073,7 +2073,7 @@ void h_glGetActiveUniformBlockiv(BridgeCtrl *C, uint8_t *D)
 
   glGetActiveUniformBlockiv(program, blockIndex, pname, &v);
 
-  memcpy(C->result_buf, &v, sizeof(GLint));
+  memcpy(GL_RESULT(C), &v, sizeof(GLint));
 }
 
 void h_glGetActiveUniformBlockName(BridgeCtrl *C, uint8_t *D)
@@ -2089,8 +2089,8 @@ void h_glGetActiveUniformBlockName(BridgeCtrl *C, uint8_t *D)
 
   glGetActiveUniformBlockName(program, blockIndex, bufSize, &len, tmp);
 
-  memcpy(C->result_buf, &len, sizeof(GLsizei));
-  memcpy(C->result_buf + sizeof(GLsizei), tmp, len);
+  memcpy(GL_RESULT(C), &len, sizeof(GLsizei));
+  memcpy(GL_RESULT(C) + sizeof(GLsizei), tmp, len);
   C->result_buf_len = sizeof(GLsizei) + len;
 }
 
@@ -2164,7 +2164,7 @@ void h_glGetPointerv(BridgeCtrl *C, uint8_t *D)
 
   /* return pointer as 64‑bit */
   uint64_t v = (uint64_t)(uintptr_t)ptr;
-  memcpy(C->result_buf, &v, sizeof(uint64_t));
+  memcpy(GL_RESULT(C), &v, sizeof(uint64_t));
   C->result_buf_len = sizeof(uint64_t);
   C->result = 0;
 }
@@ -2216,7 +2216,7 @@ void h_glGetProgramBinary(BridgeCtrl *C, uint8_t *D)
   }
 
   /* Return only the two scalars through result_buf */
-  uint8_t *out = C->result_buf;
+  uint8_t *out = GL_RESULT(C);
   memcpy(out, &length, sizeof(GLsizei));
   memcpy(out + sizeof(GLsizei), &binaryFormat, sizeof(GLenum));
   C->result_buf_len = sizeof(GLsizei) + sizeof(GLenum);
@@ -2355,7 +2355,7 @@ void h_glGetBufferParameteri64v(BridgeCtrl *C, uint8_t *D)
 
   glGetBufferParameteri64v(target, pname, &value);
 
-  memcpy(C->result_buf, &value, sizeof(GLint64));
+  memcpy(GL_RESULT(C), &value, sizeof(GLint64));
   C->result_buf_len = sizeof(GLint64);
   C->result = 0;
 }
@@ -2376,7 +2376,7 @@ void h_glGetInteger64i_v(BridgeCtrl *C, uint8_t *D)
   else
     log_error("p_glGetInteger64i_v not found!");
 
-  memcpy(C->result_buf, &value, sizeof(GLint64));
+  memcpy(GL_RESULT(C), &value, sizeof(GLint64));
   C->result_buf_len = sizeof(GLint64);
   C->result = 0;
 }
@@ -2412,7 +2412,7 @@ void h_glGetInternalformativ(BridgeCtrl *C, uint8_t *D)
 
   glGetInternalformativ(target, internalformat, pname, bufSize, tmp);
 
-  memcpy(C->result_buf, tmp, sizeof(GLint) * bufSize);
+  memcpy(GL_RESULT(C), tmp, sizeof(GLint) * bufSize);
   C->result_buf_len = sizeof(GLint) * bufSize;
   C->result = 0;
 }
@@ -2433,7 +2433,7 @@ void h_glGetIntegeri_v(BridgeCtrl *C, uint8_t *D)
   else
     log_error("glGetIntegeri_v not found!");
 
-  memcpy(C->result_buf, &value, sizeof(GLint));
+  memcpy(GL_RESULT(C), &value, sizeof(GLint));
   C->result_buf_len = sizeof(GLint);
   C->result = 0;
 }
@@ -2450,7 +2450,7 @@ void h_glGetSamplerParameterIiv(BridgeCtrl *C, uint8_t *D)
 
   glGetSamplerParameterIiv(sampler, pname, tmp);
 
-  memcpy(C->result_buf, tmp, sizeof(tmp));
+  memcpy(GL_RESULT(C), tmp, sizeof(tmp));
   C->result_buf_len = sizeof(tmp);
   C->result = 0;
 }
@@ -2467,7 +2467,7 @@ void h_glGetSamplerParameterIuiv(BridgeCtrl *C, uint8_t *D)
 
   glGetSamplerParameterIuiv(sampler, pname, tmp);
 
-  memcpy(C->result_buf, tmp, sizeof(tmp));
+  memcpy(GL_RESULT(C), tmp, sizeof(tmp));
   C->result_buf_len = sizeof(tmp);
   C->result = 0;
 }
@@ -2995,7 +2995,7 @@ void h_glGetDebugMessageLog(BridgeCtrl *C, uint8_t *D)
   GLuint num = glGetDebugMessageLog(count, bufSize, sources, types, ids,
                                     severities, lengths, log);
 
-  uint8_t *out = C->result_buf;
+  uint8_t *out = GL_RESULT(C);
   memcpy(out, &num, sizeof(GLuint));
   out += sizeof(GLuint);
 
@@ -3017,7 +3017,7 @@ void h_glGetDebugMessageLog(BridgeCtrl *C, uint8_t *D)
     log += lengths[i];
   }
 
-  C->result_buf_len = out - C->result_buf;
+  C->result_buf_len = out - GL_RESULT(C);
   C->result = 0;
 }
 
@@ -3035,8 +3035,8 @@ void h_glGetObjectLabel(BridgeCtrl *C, uint8_t *D)
 
   glGetObjectLabel(identifier, name, bufSize, &len, tmp);
 
-  memcpy(C->result_buf, &len, sizeof(GLsizei));
-  memcpy(C->result_buf + sizeof(GLsizei), tmp, len);
+  memcpy(GL_RESULT(C), &len, sizeof(GLsizei));
+  memcpy(GL_RESULT(C) + sizeof(GLsizei), tmp, len);
 
   C->result_buf_len = sizeof(GLsizei) + len;
   C->result = 0;
@@ -3055,8 +3055,8 @@ void h_glGetObjectPtrLabel(BridgeCtrl *C, uint8_t *D)
 
   glGetObjectPtrLabel(ptr, bufSize, &len, tmp);
 
-  memcpy(C->result_buf, &len, sizeof(GLsizei));
-  memcpy(C->result_buf + sizeof(GLsizei), tmp, len);
+  memcpy(GL_RESULT(C), &len, sizeof(GLsizei));
+  memcpy(GL_RESULT(C) + sizeof(GLsizei), tmp, len);
 
   C->result_buf_len = sizeof(GLsizei) + len;
   C->result = 0;
@@ -3264,7 +3264,7 @@ void h_glGenProgramPipelines(BridgeCtrl *C, uint8_t *D)
 
   glGenProgramPipelines(n, tmp);
 
-  memcpy(C->result_buf, tmp, sizeof(GLuint) * n);
+  memcpy(GL_RESULT(C), tmp, sizeof(GLuint) * n);
   C->result_buf_len = sizeof(GLuint) * n;
   C->result = 0;
 }
@@ -3295,7 +3295,7 @@ void h_glIsProgramPipeline(BridgeCtrl *C, uint8_t *D)
 
   GLboolean result = glIsProgramPipeline(pipeline);
 
-  memcpy(C->result_buf, &result, sizeof(GLboolean));
+  memcpy(GL_RESULT(C), &result, sizeof(GLboolean));
   C->result_buf_len = sizeof(GLboolean);
   C->result = 0;
 }
@@ -3437,7 +3437,7 @@ void h_glGetProgramInterfaceiv(BridgeCtrl *C, uint8_t *D)
 
   glGetProgramInterfaceiv(program, iface, pname, &outv);
 
-  memcpy(C->result_buf, &outv, sizeof(GLint));
+  memcpy(GL_RESULT(C), &outv, sizeof(GLint));
   C->result_buf_len = sizeof(GLint);
   C->result = 0;
 }
@@ -3455,7 +3455,7 @@ void h_glGetProgramResourceIndex(BridgeCtrl *C, uint8_t *D)
 
   GLuint idx = glGetProgramResourceIndex(program, iface, name);
 
-  memcpy(C->result_buf, &idx, sizeof(GLuint));
+  memcpy(GL_RESULT(C), &idx, sizeof(GLuint));
   C->result_buf_len = sizeof(GLuint);
   C->result = 0;
 }
@@ -3474,7 +3474,7 @@ void h_glGetProgramResourceName(BridgeCtrl *C, uint8_t *D)
 
   glGetProgramResourceName(program, iface, index, bufSize, &length, tmp);
 
-  uint8_t *out = C->result_buf;
+  uint8_t *out = GL_RESULT(C);
   memcpy(out, &length, sizeof(GLsizei));
   out += sizeof(GLsizei);
   memcpy(out, tmp, length);
@@ -3503,7 +3503,7 @@ void h_glGetProgramResourceiv(BridgeCtrl *C, uint8_t *D)
   glGetProgramResourceiv(program, iface, index, propCount, props, bufSize,
                          &length, vals);
 
-  uint8_t *out = C->result_buf;
+  uint8_t *out = GL_RESULT(C);
   memcpy(out, &length, sizeof(GLsizei));
   out += sizeof(GLsizei);
   memcpy(out, vals, sizeof(GLint) * length);
@@ -3525,7 +3525,7 @@ void h_glGetProgramResourceLocation(BridgeCtrl *C, uint8_t *D)
 
   GLint loc = glGetProgramResourceLocation(program, iface, name);
 
-  memcpy(C->result_buf, &loc, sizeof(GLint));
+  memcpy(GL_RESULT(C), &loc, sizeof(GLint));
   C->result_buf_len = sizeof(GLint);
   C->result = 0;
 }
@@ -3572,7 +3572,7 @@ void h_glCreateShaderProgramv(BridgeCtrl *C, uint8_t *D)
 
   GLuint prog = glCreateShaderProgramv(type, count, strings);
 
-  memcpy(C->result_buf, &prog, sizeof(GLuint));
+  memcpy(GL_RESULT(C), &prog, sizeof(GLuint));
   C->result_buf_len = sizeof(GLuint);
   C->result = 0;
 }
@@ -3601,7 +3601,7 @@ void h_glGetProgramPipelineInfoLog(BridgeCtrl *C, uint8_t *D)
 
   glGetProgramPipelineInfoLog(pipeline, bufSize, &length, tmp);
 
-  uint8_t *out = C->result_buf;
+  uint8_t *out = GL_RESULT(C);
   memcpy(out, &length, sizeof(GLsizei));
   out += sizeof(GLsizei);
   memcpy(out, tmp, length);
@@ -3645,7 +3645,7 @@ void h_glGetGraphicsResetStatus(BridgeCtrl *C, uint8_t *D)
   (void)D;
   GLenum st = glGetGraphicsResetStatus();
 
-  memcpy(C->result_buf, &st, sizeof(GLenum));
+  memcpy(GL_RESULT(C), &st, sizeof(GLenum));
   C->result_buf_len = sizeof(GLenum);
   C->result = 0;
 }
@@ -3666,7 +3666,7 @@ void h_glReadnPixels(BridgeCtrl *C, uint8_t *D)
 
   glReadnPixels(x, y, w, h, format, type, bufSize, tmp);
 
-  memcpy(C->result_buf, tmp, bufSize);
+  memcpy(GL_RESULT(C), tmp, bufSize);
   C->result_buf_len = bufSize;
   C->result = 0;
 }
@@ -3683,7 +3683,7 @@ void h_glGetnUniformfv(BridgeCtrl *C, uint8_t *D)
 
   glGetnUniformfv(program, loc, bufSize, tmp);
 
-  memcpy(C->result_buf, tmp, bufSize);
+  memcpy(GL_RESULT(C), tmp, bufSize);
   C->result_buf_len = bufSize;
   C->result = 0;
 }
@@ -3700,7 +3700,7 @@ void h_glGetnUniformiv(BridgeCtrl *C, uint8_t *D)
 
   glGetnUniformiv(program, loc, bufSize, tmp);
 
-  memcpy(C->result_buf, tmp, bufSize);
+  memcpy(GL_RESULT(C), tmp, bufSize);
   C->result_buf_len = bufSize;
   C->result = 0;
 }
@@ -3717,7 +3717,7 @@ void h_glGetnUniformuiv(BridgeCtrl *C, uint8_t *D)
 
   glGetnUniformuiv(program, loc, bufSize, tmp);
 
-  memcpy(C->result_buf, tmp, bufSize);
+  memcpy(GL_RESULT(C), tmp, bufSize);
   C->result_buf_len = bufSize;
   C->result = 0;
 }

@@ -14,6 +14,16 @@ void bridge_send_void(void);
 uint64_t bridge_send_call(void);
 uint64_t bridge_send_swap(void);
 BridgeCtrl *bridge_ctrl(void);
+uint8_t *bridge_result_buf(void);
+uint32_t bridge_result_len(void);
+uint64_t bridge_result_val(void);
+
+/* arg is evaluated and discarded so existing `BridgeCtrl *C2` locals
+ * don't become unused-variable warnings */
+#define GL_RESULT(C) ((void)(C), bridge_result_buf())
+
+#define GL_RESULT_LEN() bridge_result_len()
+#define GL_RESULT_VAL() bridge_result_val()
 
 /*
  * Convenience macros used in gles2_stub.c

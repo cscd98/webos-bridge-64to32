@@ -1510,7 +1510,7 @@ void h_glGetActiveUniform(BridgeCtrl *C, uint8_t *D)
   glGetActiveUniform(p, idx, bufsz, &len, &size, &type,
                      (GLchar *)dp(C->data_offset));
   C->result = ((uint64_t)type << 32) | (uint64_t)(uint32_t)size;
-  *(GLsizei *)C->result_buf = len;
+  *(GLsizei *)GL_RESULT(C) = len;
   (void)D;
 }
 
@@ -1634,7 +1634,7 @@ void h_glGetActiveAttrib(BridgeCtrl *C, uint8_t *D)
   glGetActiveAttrib(p, idx, bufsz, &len, &size, &type,
                     (GLchar *)dp(C->data_offset));
   C->result = ((uint64_t)type << 32) | (uint64_t)(uint32_t)size;
-  *(GLsizei *)C->result_buf = len;
+  *(GLsizei *)GL_RESULT(C) = len;
   (void)D;
 }
 void h_glBindAttribLocation(BridgeCtrl *C, uint8_t *D)
@@ -2404,16 +2404,16 @@ void h_glGetString(BridgeCtrl *C, uint8_t *D)
 
   if (s)
   {
-    strncpy((char *)C->result_buf, (const char *)s, BRIDGE_RESULT_SIZE - 1);
-    C->result_buf[BRIDGE_RESULT_SIZE - 1] = '\0';
+    strncpy((char *)GL_RESULT(C), (const char *)s, BRIDGE_RESULT_SIZE - 1);
+    GL_RESULT(C)[BRIDGE_RESULT_SIZE - 1] = '\0';
   }
   else
   {
-    C->result_buf[0] = '\0';
+    GL_RESULT(C)[0] = '\0';
   }
 
 #ifdef DEBUG_GL_GETSTRING
-  log_console("h_glGetString: name=0x%x result=\"%s\"", name, C->result_buf);
+  log_console("h_glGetString: name=0x%x result=\"%s\"", name, GL_RESULT(C));
 #endif
 
   C->result = 0;

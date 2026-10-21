@@ -85,6 +85,10 @@ static uint64_t g_local_seq = 0;
 static uint64_t g_local_data_head = 0;
 static pid_t g_client_pid = 0;
 
+static __thread uint8_t  t_result[BRIDGE_RESULT_SIZE];
+static __thread uint32_t t_result_len;
+static __thread uint64_t t_result_val;
+
 #ifdef DEBUG_OPCODES
 static uint64_t g_ring_full_stalls = 0;
 static uint64_t g_data_full_stalls = 0;
@@ -97,6 +101,9 @@ void bridge_dump_backpressure_stats(void)
              (unsigned long long)g_data_full_stalls);
 }
 #endif
+
+uint32_t bridge_result_len(void) { return t_result_len; }
+uint64_t bridge_result_val(void) { return t_result_val; }
 
 static void print_environment_version(void)
 {
@@ -398,6 +405,15 @@ static uint64_t g_ft_win_max_ns = 0;
 #define FT_WINDOW_FRAMES 60
 #endif
 
+/* Per-thread copy of the proxy's result buffer, taken under g_lock so a
+ * concurrent blocking call on another thread can't clobber it. */
+static __thread uint8_t t_result[BRIDGE_RESULT_SIZE];
+
+uint8_t *bridge_result_buf(void)
+{
+  return t_result;
+}
+
 /* Wait until the proxy has completed `seq`.  The slot must have been sent
  * with needs_response != 0 so the proxy posts resp_efd once it is done.
  * Spins for spin_us first: an eventfd sleep/wake costs tens of us on the
@@ -536,6 +552,7 @@ void bridge_begin(void)
   g_cur_slot->target_ctx = g_stub_current_ctx;
   g_cur_slot->data_watermark = g_local_data_head;
   g_cur_slot->data_watermark_valid = 0;
+  g_cur_slot->result_buf_len = 0;
 }
 
 uint32_t bridge_data_write(const void *src, size_t size)
@@ -625,6 +642,9 @@ uint64_t bridge_send_call(void)
 #endif
 
   uint64_t r = g_cur_slot->result;
+  t_result_val = r;
+  t_result_len = g_cur_slot->result_buf_len;
+  memcpy(t_result, g_ring->result_buf, BRIDGE_RESULT_SIZE);
   pthread_mutex_unlock(&g_lock);
   return r;
 }

@@ -787,7 +787,7 @@ static void _fire_seat_capabilities(uint32_t idx)
 static void _deliver_input_events(void)
 {
   BridgeCtrl *C = BRIDGE_CTRL_WL();
-  const uint32_t *rb = (const uint32_t *)C->result_buf;
+  const uint32_t *rb = (const uint32_t *)WL_RESULT(C);
 
   /* lazy seat capability firing - due to kodi. */
   if (!g_all_lazy_caps_done)
@@ -1149,7 +1149,7 @@ struct wl_display *wl_display_connect(const char *name)
     return NULL;
   }
 
-  const uint32_t *rb = (const uint32_t *)C->result_buf;
+  const uint32_t *rb = (const uint32_t *)WL_RESULT(C);
   g_bs.num_seats = rb[1] ? rb[1] : 1;
   g_bs.num_outputs = rb[2] ? rb[2] : 1;
   g_bs.id_watermark = rb[3];

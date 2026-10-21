@@ -36,6 +36,7 @@
 
 extern uint8_t *data;
 extern uint8_t *wl_data;
+extern BridgeRing *ring;
 
 /* ── Helper: data pointer ────────────────────────────────────────────────── */
 static inline void *dp(uint32_t off)
@@ -55,6 +56,8 @@ static inline void *dp_wl(uint32_t off)
 #ifndef GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT
 #define GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT 0x00004000
 #endif
+
+#define GL_RESULT(C) ((void)(C), ring->result_buf)
 
 /* Copy the texels the stub piggybacked (data2) for a persistently mapped
  * GL_PIXEL_UNPACK_BUFFER into the real mapping at the upload's buffer offset,

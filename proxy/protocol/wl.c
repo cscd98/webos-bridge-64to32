@@ -639,7 +639,7 @@ void h_wl_display_connect(BridgeCtrl *C, uint8_t *D)
   wl_callback_destroy(probe);
   wl_display_roundtrip(proxy_wl_display);
 
-  uint32_t *rb = (uint32_t *)C->result_buf;
+  uint32_t *rb = (uint32_t *)WL_RESULT(C);
   rb[0] = 0;
   rb[1] = 1; /* num_seats   */
   rb[2] = 1; /* num_outputs */
@@ -1030,7 +1030,7 @@ void h_wl_roundtrip(BridgeCtrl *C, uint8_t *D)
       proxy_wl_pump();
   }
 
-  uint32_t *rb = (uint32_t *)C->result_buf;
+  uint32_t *rb = (uint32_t *)WL_RESULT(C);
 
   /* ── keyboard events ── */
   rb[0] = g_input_evt_count;

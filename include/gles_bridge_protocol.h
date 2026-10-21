@@ -1335,7 +1335,9 @@ typedef struct
 
   /* Result from proxy */
   uint64_t result; /* scalar return value                */
-  uint8_t result_buf[BRIDGE_RESULT_SIZE];
+
+  // Result buffer is now shared in the ring, so this per-slot buffer is not needed.
+  //uint8_t result_buf[BRIDGE_RESULT_SIZE];
   uint32_t result_buf_len;
 
   /* Proxy liveness */
@@ -1359,11 +1361,17 @@ typedef struct
   _Atomic uint64_t data_tail;
   _Atomic uint32_t consumer_waiting;
 
+    /* Shared by all blocking calls (only one is ever in flight). */
+  _Alignas(64) uint8_t result_buf[BRIDGE_RESULT_SIZE];
+
   int32_t proxy_pid;
   int32_t client_pid;
 
   BridgeCtrl slots[]; /* length == bridge_config_ring_slots() */
 } BridgeRing;
+
+#define WL_RESULT(C) ((uint8_t *)((BridgeCtrl *)(C) + 1))
+_Static_assert(sizeof(BridgeCtrl) < 512, "BridgeCtrl grew; check ring memory");
 
 #define GLES_BRIDGE_DATA_SIZE (64u * 1024u * 1024u) /* 64 MB  */
 

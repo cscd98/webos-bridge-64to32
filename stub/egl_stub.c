@@ -210,14 +210,14 @@ EGLAPI EGLBoolean EGLAPIENTRY eglInitialize(EGLDisplay dpy, EGLint *major,
   /* Proxy packs [major, minor] into result_buf */
   if (major)
   {
-    *major = ((EGLint *)C->result_buf)[0];
+    *major = ((EGLint *)GL_RESULT(C))[0];
 #ifdef DEBUG
     log_console("[eglInitialize] major=%d", *major);
 #endif
   }
   if (minor)
   {
-    *minor = ((EGLint *)C->result_buf)[1];
+    *minor = ((EGLint *)GL_RESULT(C))[1];
 #ifdef DEBUG
     log_console("[eglInitialize] minor=%d", *minor);
 #endif
@@ -291,7 +291,7 @@ EGLAPI const char *EGLAPIENTRY eglQueryString(EGLDisplay dpy, EGLint name)
 
   BRIDGE_SEND_CALL();
 
-  const char *src = (const char *)BRIDGE_CTRL()->result_buf;
+  const char *src = (const char *)GL_RESULT(0);
 
   /* If proxy returned NULL or empty - DO NOT CACHE */
   if (!src || src[0] == '\0')

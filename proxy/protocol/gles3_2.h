@@ -1,5 +1,10 @@
 #pragma once
 
+// Diagnostic functions for pending sync objects
+#ifdef DEBUG_POLL_PENDING_SYNCS
+void proxy_poll_pending_syncs(void);
+#endif
+
 /* ========================================================================= */
 /* GLES 3.0                                                                  */
 /* ========================================================================= */

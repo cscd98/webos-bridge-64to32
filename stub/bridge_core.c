@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <pthread.h>
+#include <sched.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdatomic.h>
@@ -88,6 +89,8 @@ static pid_t g_client_pid = 0;
 static __thread uint8_t  t_result[BRIDGE_RESULT_SIZE];
 static __thread uint32_t t_result_len;
 static __thread uint64_t t_result_val;
+_Atomic unsigned int g_surface_gen = 1; // cache speed up eglQuerySurface
+_Atomic unsigned int g_swap_count = 1; // cache spped up for buffer age
 
 #ifdef DEBUG_OPCODES
 static uint64_t g_ring_full_stalls = 0;
@@ -101,6 +104,62 @@ void bridge_dump_backpressure_stats(void)
              (unsigned long long)g_data_full_stalls);
 }
 #endif
+
+/* ── Stub-side sync handle allocator ─────────────────────────────────── */
+static pthread_mutex_t g_sync_lock = PTHREAD_MUTEX_INITIALIZER;
+static uint8_t g_sync_used[BRIDGE_MAX_SYNCS];
+static uint32_t g_sync_gen = 0;
+static uint32_t g_sync_next = 1;
+
+uint32_t bridge_sync_alloc(void)
+{
+  uint32_t handle = 0;
+
+  pthread_mutex_lock(&g_sync_lock);
+  for (uint32_t n = 1; n < BRIDGE_MAX_SYNCS; n++)
+  {
+    /* next-fit so an id isn't reused immediately after it's freed */
+    uint32_t id = 1 + ((g_sync_next - 1 + n - 1) % (BRIDGE_MAX_SYNCS - 1));
+    if (g_sync_used[id])
+      continue;
+
+    g_sync_used[id] = 1;
+    g_sync_next = id + 1;
+
+    g_sync_gen = (g_sync_gen + 1) & 0x00FFFFFFu;
+    if (g_sync_gen == 0)
+      g_sync_gen = 1;
+
+    handle = (g_sync_gen << BRIDGE_SYNC_ID_BITS) | id;
+    break;
+  }
+  pthread_mutex_unlock(&g_sync_lock);
+
+  return handle;
+}
+
+void bridge_sync_free(uint32_t handle)
+{
+  uint32_t id = handle & BRIDGE_SYNC_ID_MASK;
+  if (!id)
+    return;
+
+  pthread_mutex_lock(&g_sync_lock);
+  g_sync_used[id] = 0;
+  pthread_mutex_unlock(&g_sync_lock);
+}
+
+bool bridge_sync_done(uint32_t handle)
+{
+  uint32_t id = handle & BRIDGE_SYNC_ID_MASK;
+  uint32_t gen = handle >> BRIDGE_SYNC_ID_BITS;
+
+  if (!id || !gen || !g_ring)
+    return false;
+
+  return atomic_load_explicit(&g_ring->sync_done_gen[id],
+                              memory_order_acquire) == gen;
+}
 
 uint32_t bridge_result_len(void) { return t_result_len; }
 uint64_t bridge_result_val(void) { return t_result_val; }
@@ -626,19 +685,37 @@ static uint64_t publish_cur(uint32_t needs_response)
 
 uint64_t bridge_send_call(void)
 {
+#ifdef DEBUG_SLOW_CALLS
+  uint32_t opc = g_cur_slot->opcode;
+  uint64_t backlog =
+      g_cur_seq - atomic_load_explicit(&g_ring->completed_seq,
+                                       memory_order_acquire);
+#endif
+
   uint64_t seq = publish_cur(1);
 
-#ifdef DEBUG_FRAMETIME
+#if defined(DEBUG_FRAMETIME) || defined(DEBUG_SLOW_CALLS)
   uint64_t t0 = bridge_now_ns();
 #endif
 
   // wait until dispatched
   wait_completed(seq);
 
+#if defined(DEBUG_FRAMETIME) || defined(DEBUG_SLOW_CALLS)
+  uint64_t dt = bridge_now_ns() - t0;
+#endif
+
 #ifdef DEBUG_FRAMETIME
   g_ft_calls++;
   g_ft_sync_calls++;
-  g_ft_sync_ns += bridge_now_ns() - t0;
+  g_ft_sync_ns += dt;
+#endif
+
+#ifdef DEBUG_SLOW_CALLS
+  if (dt > (uint64_t)DEBUG_SLOW_CALLS_US * 1000ull)
+    log_always("slow blocking call: %s %.2fms (backlog at issue: %llu ops)",
+               opcode_to_string((GLBridgeOpcode)opc), dt / 1e6,
+               (unsigned long long)backlog);
 #endif
 
   uint64_t r = g_cur_slot->result;
@@ -751,7 +828,7 @@ static void frametime_log(uint64_t swap_wait_ns)
 }
 #endif
 
-/* eglSwapBuffers.  With async_swap the stub does not wait for this swap:
+/* eglSwapBuffers. With async_swap the stub does not wait for this swap:
  * it publishes it and then only waits for the *previous* swap, so the app
  * can build frame N+1 while the proxy is still submitting and presenting
  * frame N, with at most one frame in flight. */

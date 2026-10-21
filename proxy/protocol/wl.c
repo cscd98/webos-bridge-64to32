@@ -1022,6 +1022,10 @@ void h_wl_roundtrip(BridgeCtrl *C, uint8_t *D)
   ArgReader r = ar_init(C->args, C->args_len);
   int roundtrip = C->args_len >= sizeof(uint32_t) ? ar_u32(&r) : 1;
 
+#ifdef DEBUG_SLOW_CALLS
+  struct timespec t0, t1;
+  clock_gettime(CLOCK_MONOTONIC, &t0);
+#endif
   if (proxy_wl_display)
   {
     if (roundtrip)
@@ -1029,7 +1033,12 @@ void h_wl_roundtrip(BridgeCtrl *C, uint8_t *D)
     else
       proxy_wl_pump();
   }
-
+#ifdef DEBUG_SLOW_CALLS
+  clock_gettime(CLOCK_MONOTONIC, &t1);
+  double ms = (t1.tv_sec - t0.tv_sec) * 1e3 + (t1.tv_nsec - t0.tv_nsec) / 1e6;
+  if (ms > 1.0)
+    log_always("h_wl_roundtrip: compositor roundtrip %.2fms", ms);
+#endif
   uint32_t *rb = (uint32_t *)WL_RESULT(C);
 
   /* ── keyboard events ── */

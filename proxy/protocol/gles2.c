@@ -35,6 +35,99 @@ static FboAttachEntry g_fbo_cache[FBO_CACHE_CTXS][FBO_CACHE_ENTRIES];
 uint32_t g_fbo_attach_skipped = 0;
 #endif
 
+typedef struct
+{
+  GLuint draw, read;
+  uint8_t valid;
+} FbBind;
+
+static FbBind g_fb[MAX_CONTEXTS];
+
+#ifdef DEBUG_FRAMETIME
+static uint64_t g_fb_sent, g_fb_skipped, g_fb_pingpong;
+static GLuint g_fb_prev_draw[MAX_CONTEXTS];
+
+void proxy_fb_dump_stats(void)
+{
+  log_always("FBO binds: sent=%llu skipped=%llu A->B->A pingpong=%llu",
+             (unsigned long long)g_fb_sent, (unsigned long long)g_fb_skipped,
+             (unsigned long long)g_fb_pingpong);
+}
+#endif
+
+#ifdef DEBUG_FBO_INVALIDATE
+void proxy_fb_reset(uint32_t ctx)
+{
+  if (ctx < MAX_CONTEXTS)
+    memset(&g_fb[ctx], 0, sizeof(g_fb[ctx]));
+}
+#endif
+
+static void proxy_bind_fb_tracked(GLenum target, GLuint fb)
+{
+  FbBind *b = (g_current_ctx < MAX_CONTEXTS) ? &g_fb[g_current_ctx] : NULL;
+
+  if (b && b->valid)
+  {
+    int same = (target == GL_FRAMEBUFFER)        ? (b->draw == fb && b->read == fb)
+               : (target == GL_DRAW_FRAMEBUFFER) ? (b->draw == fb)
+               : (target == GL_READ_FRAMEBUFFER) ? (b->read == fb)
+                                                 : 0;
+    if (same)
+    {
+#ifdef DEBUG_FRAMETIME
+      g_fb_skipped++;
+#endif
+      return;
+    }
+  }
+
+  int changes_draw = (target == GL_FRAMEBUFFER || target == GL_DRAW_FRAMEBUFFER);
+
+  if (b && b->valid && changes_draw && b->draw != fb)
+  {
+#ifdef DEBUG_FRAMETIME
+    if (g_fb_prev_draw[g_current_ctx] == fb)
+      g_fb_pingpong++;
+    g_fb_prev_draw[g_current_ctx] = b->draw;
+#endif
+#ifdef DEBUG_FBO_INVALIDATE
+    /* EXPERIMENT ONLY: will corrupt output if the app reuses depth/stencil
+     * without clearing. Measures potential gain, nothing more. */
+    if (b->draw != 0)
+    {
+      static const GLenum att[2] = {GL_DEPTH_ATTACHMENT, GL_STENCIL_ATTACHMENT};
+      glInvalidateFramebuffer(GL_DRAW_FRAMEBUFFER, 2, att);
+    }
+#endif
+  }
+
+  glBindFramebuffer(target, fb);
+#ifdef DEBUG_FRAMETIME
+  g_fb_sent++;
+#endif
+
+  if (b)
+  {
+    if (target == GL_FRAMEBUFFER)
+      b->draw = b->read = fb;
+    else if (target == GL_DRAW_FRAMEBUFFER)
+      b->draw = fb;
+    else if (target == GL_READ_FRAMEBUFFER)
+      b->read = fb;
+
+    if (!b->valid)
+    {
+      /* first bind: the other binding is unknown, don't claim it */
+      if (target == GL_DRAW_FRAMEBUFFER)
+        b->read = 0xFFFFFFFFu;
+      if (target == GL_READ_FRAMEBUFFER)
+        b->draw = 0xFFFFFFFFu;
+      b->valid = 1;
+    }
+  }
+}
+
 static uint32_t fbo_cache_ctx(void)
 {
   return g_current_ctx < FBO_CACHE_CTXS ? g_current_ctx : 0;
@@ -728,6 +821,15 @@ void h_glDeleteFramebuffers(BridgeCtrl *C, uint8_t *D)
 
   fbo_cache_forget_fbos(n, fbs);
   glDeleteFramebuffers(n, fbs);
+
+#ifdef DEBUG_FBO_INVALIDATE
+  for (GLsizei i = 0; i < n; i++)
+    for (int c = 0; c < MAX_CONTEXTS; c++)
+    {
+      if (g_fb[c].draw == fbs[i]) g_fb[c].draw = 0;
+      if (g_fb[c].read == fbs[i]) g_fb[c].read = 0;
+    }
+#endif
 }
 
 #ifdef DEBUG_VERBOSE
@@ -808,8 +910,12 @@ void h_glBindFramebuffer(BridgeCtrl *C, uint8_t *D)
 #else
   GLenum target = ar_u32(&r);
   GLuint fb = ar_u32(&r);
+#ifdef DEBUG_FBO_INVALIDATE
+  proxy_bind_fb_tracked(target, fb);
+#else
   glBindFramebuffer(target, fb);
   fbo_cache_bind(target, fb);
+#endif
 #endif
 }
 

@@ -1309,6 +1309,8 @@ static inline char *wl_opcode_to_string(WLBridgeOpcode op)
 /* GLsync handles are small IDs allocated by the stub, so glFenceSync does not
  * need a round trip; the proxy maps each ID to its real GLsync. */
 #define BRIDGE_MAX_SYNCS 256
+#define BRIDGE_SYNC_ID_BITS 8
+#define BRIDGE_SYNC_ID_MASK 0xFFu
 
 #define IDX_MODE_POINTER 0
 #define IDX_MODE_OFFSET 1
@@ -1366,6 +1368,9 @@ typedef struct
 
   int32_t proxy_pid;
   int32_t client_pid;
+
+  /* gen of the last fence the proxy saw signaled, per sync id */
+  _Atomic uint32_t sync_done_gen[BRIDGE_MAX_SYNCS];
 
   BridgeCtrl slots[]; /* length == bridge_config_ring_slots() */
 } BridgeRing;

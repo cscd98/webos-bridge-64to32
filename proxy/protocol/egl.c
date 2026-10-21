@@ -226,11 +226,13 @@ void h_eglGetDisplay(BridgeCtrl *C, uint8_t *D)
   (void)wl_fd;
 
 #ifdef HAVE_OWN_WAYLAND_CLIENT
+#ifdef DEBUG_WAYLAND
   log_console(
       "h_eglGetDisplay (tid=%ld): watermark=%u wl_fd=%d proxy_wl_display: %p "
       "proxy_wl_display fd: %d ",
       syscall(SYS_gettid), watermark, wl_fd, proxy_wl_display,
       wl_display_get_fd(proxy_wl_display));
+#endif
   /*
    * proxy_wl_display was already opened by proxy_wayland_init() inside
    * h_wl_display_connect (if using libwayland-client-stub)
@@ -847,6 +849,11 @@ void h_eglCreateContext(BridgeCtrl *C, uint8_t *D)
   if (xi)
     fbo_cache_reset_ctx(xi);
 
+#ifdef DEBUG_FBO_INVALIDATE
+  if (xi)
+    proxy_fb_reset(xi);
+#endif
+
   C->result = xi;
   (void)D;
 }
@@ -1052,6 +1059,14 @@ void h_eglSwapBuffers(BridgeCtrl *C, uint8_t *D)
   log_console("eglSwapBuffers: FB = %d", fb);
 #else
   C->result = eglSwapBuffers(DISP(di), SURF(si));
+#endif
+
+  if (!C->result)
+    log_error("h_eglSwapBuffers: eglSwapBuffers failed err=0x%x",
+              eglGetError());
+
+#ifdef DEBUG_POLL_PENDING_SYNCS
+  proxy_poll_pending_syncs();
 #endif
   (void)D;
 }

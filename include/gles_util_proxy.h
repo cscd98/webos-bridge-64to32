@@ -23,6 +23,7 @@ typedef struct
 typedef struct
 {
   GLsync real;
+  uint32_t gen;
 } SyncEntry;
 
 extern AttribState g_attrib_proxy_state[MAX_VERTEX_ATTRIBS];

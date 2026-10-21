@@ -44,6 +44,12 @@
 #include "gles_bridge_protocol.h"
 #include "gles_util_stub.h"
 
+// cache for eglQuerySurface results (width and height) to avoid repeated bridge calls
+#define QS_CACHE 16
+static struct { uint32_t dpy, surf; int32_t attr, val; unsigned gen; } qs_cache[QS_CACHE][2];
+#define EGL_BUFFER_AGE_EXT_ATTR 0x313D
+static struct { uint32_t dpy, surf; unsigned swaps; EGLint val; } age_cache;
+
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
 /* Convert an opaque EGL handle to the uint32 index we send over the wire. */
@@ -588,6 +594,8 @@ EGLAPI EGLSurface EGLAPIENTRY eglCreateWindowSurface(
   C->data2_offset = 0;
   C->data2_size = 0;
 
+  atomic_fetch_add(&g_surface_gen, 1);
+
 #ifdef DEBUG
   uint64_t raw = BRIDGE_SEND_CALL();
   log_console(
@@ -672,13 +680,44 @@ EGLAPI EGLBoolean EGLAPIENTRY eglDestroySurface(EGLDisplay dpy,
   aw_u32(&W, H2I(dpy));
   aw_u32(&W, H2I(surface));
   C->args_len = W.pos;
+
+  atomic_fetch_add(&g_surface_gen, 1);
+  age_cache.swaps = 0;
+
   return (EGLBoolean)BRIDGE_SEND_CALL();
 }
 
-EGLAPI EGLBoolean EGLAPIENTRY eglQuerySurface(EGLDisplay dpy,
-                                              EGLSurface surface,
+EGLAPI EGLBoolean EGLAPIENTRY eglQuerySurface(EGLDisplay dpy, EGLSurface surface,
                                               EGLint attribute, EGLint *value)
 {
+#ifdef DEBUG_SLOW_CALLS
+  log_always("eglQuerySurface attr=0x%x gen=%u", attribute,
+             atomic_load(&g_surface_gen));
+#endif
+  if (attribute == EGL_BUFFER_AGE_EXT_ATTR && value &&
+      age_cache.swaps == atomic_load(&g_swap_count) &&
+      age_cache.surf == H2I(surface) && age_cache.dpy == H2I(dpy))
+  {
+    *value = age_cache.val;
+    return EGL_TRUE;
+  }
+
+  // cache width and height to avoid repeated bridge calls
+  int cacheable = (attribute == EGL_WIDTH || attribute == EGL_HEIGHT);
+  unsigned slot = H2I(surface) & (QS_CACHE - 1);
+  int ai = (attribute == EGL_HEIGHT);
+
+  if (cacheable && value)
+  {
+    unsigned gen = atomic_load(&g_surface_gen);
+    if (qs_cache[slot][ai].gen == gen && qs_cache[slot][ai].surf == H2I(surface) &&
+        qs_cache[slot][ai].dpy == H2I(dpy) && qs_cache[slot][ai].attr == attribute)
+    {
+      *value = qs_cache[slot][ai].val;
+      return EGL_TRUE;
+    }
+  }
+
   BRIDGE_BEGIN();
   BridgeCtrl *C = BRIDGE_CTRL();
   setup_egl(OP_eglQuerySurface);
@@ -691,6 +730,25 @@ EGLAPI EGLBoolean EGLAPIENTRY eglQuerySurface(EGLDisplay dpy,
   EGLBoolean ok = (EGLBoolean)(r >> 32);
   if (value)
     *value = (EGLint)(r & 0xFFFFFFFF);
+
+  // update cache if the result is cacheable and valid
+  if (cacheable && ok && value)
+  {
+    qs_cache[slot][ai].dpy = H2I(dpy);
+    qs_cache[slot][ai].surf = H2I(surface);
+    qs_cache[slot][ai].attr = attribute;
+    qs_cache[slot][ai].val = *value;
+    qs_cache[slot][ai].gen = atomic_load(&g_surface_gen);
+  }
+
+  if (attribute == EGL_BUFFER_AGE_EXT_ATTR && ok && value)
+  {
+    age_cache.dpy = H2I(dpy);
+    age_cache.surf = H2I(surface);
+    age_cache.val = *value;
+    age_cache.swaps = atomic_load(&g_swap_count);
+  }
+
   return ok;
 }
 
@@ -882,6 +940,8 @@ EGLAPI EGLBoolean EGLAPIENTRY eglMakeCurrent(EGLDisplay display,
   else
     have_last = 0; /* failed — don't trust cached state */
 
+  age_cache.swaps = 0;
+
   return ok;
 }
 
@@ -955,8 +1015,15 @@ EGLAPI EGLBoolean EGLAPIENTRY eglSwapBuffers(EGLDisplay dpy, EGLSurface surface)
       bridge_dump_backpressure_stats();
   }
 #endif
+
+  atomic_fetch_add(&g_swap_count, 1); // speed up buffer age tracking
+
+#ifdef ASYNC_SWAP
   /* Blocks only for the previous frame when async_swap is enabled */
   return (EGLBoolean)bridge_send_swap();
+#else
+  return (EGLBoolean)BRIDGE_SEND_CALL();
+#endif
 }
 
 EGLAPI EGLBoolean EGLAPIENTRY eglSwapInterval(EGLDisplay dpy, EGLint interval)

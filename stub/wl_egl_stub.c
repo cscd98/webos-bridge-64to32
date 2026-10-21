@@ -67,6 +67,8 @@ WL_EXPORT struct wl_egl_window *wl_egl_window_create(struct wl_surface *surface,
 
   w->slot = proxy_slot;
 
+  atomic_fetch_add(&g_surface_gen, 1); // cache speed up for eglQuerySurface
+
   return (struct wl_egl_window *)w;
 }
 
@@ -96,6 +98,8 @@ WL_EXPORT void wl_egl_window_destroy(struct wl_egl_window *egl_window)
   BRIDGE_SEND_VOID();
 
   free(w);
+
+  atomic_fetch_add(&g_surface_gen, 1); // cache speed up for eglQuerySurface
 }
 
 WL_EXPORT void wl_egl_window_resize(struct wl_egl_window *egl_window, int width,
@@ -133,6 +137,8 @@ WL_EXPORT void wl_egl_window_resize(struct wl_egl_window *egl_window, int width,
   C->args_len = W.pos;
 
   BRIDGE_SEND_VOID();
+
+  atomic_fetch_add(&g_surface_gen, 1); // cache speed up for eglQuerySurface
 }
 
 WL_EXPORT void wl_egl_window_get_attached_size(struct wl_egl_window *egl_window,

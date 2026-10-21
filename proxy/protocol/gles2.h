@@ -1,5 +1,13 @@
 #pragma once
 
+// Performance logging
+#ifdef DEBUG_FBO_INVALIDATE
+void proxy_fb_reset(uint32_t ctx);
+#endif
+#ifdef DEBUG_FRAMETIME
+void proxy_fb_dump_stats(void);
+#endif
+
 void h_glActiveTexture(BridgeCtrl *C, uint8_t *D);
 void h_glBindTexture(BridgeCtrl *C, uint8_t *D);
 void h_glGenTextures(BridgeCtrl *C, uint8_t *D);

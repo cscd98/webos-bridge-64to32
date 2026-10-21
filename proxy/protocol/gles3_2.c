@@ -9,13 +9,12 @@
 #include <unistd.h>
 #endif
 
-#define MAX_SYNCS BRIDGE_MAX_SYNCS
 MapEntry maps[MAX_MAPS];
-static SyncEntry syncs[MAX_SYNCS];
+static SyncEntry syncs[BRIDGE_MAX_SYNCS];
 
 static void store_sync(uint32_t id, GLsync s)
 {
-  if (id == 0 || id >= MAX_SYNCS)
+  if (id == 0 || id >= BRIDGE_MAX_SYNCS)
   {
     log_error("store_sync: invalid sync id %u", id);
     if (s)
@@ -27,19 +26,45 @@ static void store_sync(uint32_t id, GLsync s)
   syncs[id].real = s;
 }
 
-static GLsync lookup_sync(uint32_t id)
+static GLsync lookup_sync(uint32_t handle)
 {
-  if (id == 0 || id >= MAX_SYNCS)
+  uint32_t id = handle & BRIDGE_SYNC_ID_MASK;
+  uint32_t gen = handle >> BRIDGE_SYNC_ID_BITS;
+
+  if (!id || !syncs[id].real || syncs[id].gen != gen)
     return NULL;
   return syncs[id].real;
 }
 
-static void free_sync(uint32_t id)
+static void sync_mark_done(uint32_t handle)
 {
-  if (id == 0 || id >= MAX_SYNCS)
-    return;
-  syncs[id].real = NULL;
+  uint32_t id = handle & BRIDGE_SYNC_ID_MASK;
+  atomic_store_explicit(&ring->sync_done_gen[id],
+                        handle >> BRIDGE_SYNC_ID_BITS, memory_order_release);
 }
+
+#ifdef DEBUG_POLL_PENDING_SYNCS
+/* Non-blocking poll of every live fence the stub hasn't seen signaled yet. */
+void proxy_poll_pending_syncs(void)
+{
+  for (uint32_t id = 1; id < BRIDGE_MAX_SYNCS; id++)
+  {
+    GLsync s = syncs[id].real;
+    if (!s)
+      continue;
+
+    uint32_t gen = syncs[id].gen;
+    if (atomic_load_explicit(&ring->sync_done_gen[id],
+                             memory_order_relaxed) == gen)
+      continue; /* already published */
+
+    GLenum res = glClientWaitSync(s, 0, 0);
+    if (res == GL_ALREADY_SIGNALED || res == GL_CONDITION_SATISFIED)
+      atomic_store_explicit(&ring->sync_done_gen[id], gen,
+                            memory_order_release);
+  }
+}
+#endif
 
 static uint32_t alloc_map(void *real, uint32_t shm_offset, GLsizeiptr length,
                           GLenum target, GLuint buffer, GLbitfield access)
@@ -646,11 +671,27 @@ void h_glFenceSync(BridgeCtrl *C, uint8_t *D)
   (void)D;
   AR(r);
 
-  uint32_t id = ar_u32(&r);
   GLenum condition = ar_u32(&r);
   GLbitfield flags = ar_u32(&r);
+  uint32_t handle = ar_u32(&r);
 
-  store_sync(id, glFenceSync(condition, flags));
+  uint32_t id = handle & BRIDGE_SYNC_ID_MASK;
+  GLsync s = glFenceSync(condition, flags);
+
+  if (!id || !s)
+  {
+    log_error("h_glFenceSync: bad handle=0x%x or glFenceSync failed (s=%p)",
+              handle, (void *)s);
+    if (s)
+      glDeleteSync(s);
+    return;
+  }
+
+  if (syncs[id].real) /* stale entry the client never deleted */
+    glDeleteSync(syncs[id].real);
+
+  syncs[id].real = s;
+  syncs[id].gen = handle >> BRIDGE_SYNC_ID_BITS;
 }
 
 void h_glClientWaitSync(BridgeCtrl *C, uint8_t *D)
@@ -658,12 +699,30 @@ void h_glClientWaitSync(BridgeCtrl *C, uint8_t *D)
   (void)D;
   AR(r);
 
-  uint32_t id = ar_u32(&r);
+  uint32_t handle = ar_u32(&r);
   GLbitfield flags = ar_u32(&r);
   GLuint64 timeout = ar_u64(&r);
+  uint32_t poll = ar_u32(&r);
 
-  GLsync s = lookup_sync(id);
-  C->result = glClientWaitSync(s, flags, timeout);
+  GLsync s = lookup_sync(handle);
+  if (!s)
+  {
+    C->result = GL_WAIT_FAILED;
+    return;
+  }
+
+  GLenum res;
+  if (poll)
+    /* FLUSH so the fence actually reaches the GPU even if nothing else
+     * is flushing the proxy's command stream */
+    res = glClientWaitSync(s, GL_SYNC_FLUSH_COMMANDS_BIT, 0);
+  else
+    res = glClientWaitSync(s, flags, timeout);
+
+  if (res == GL_ALREADY_SIGNALED || res == GL_CONDITION_SATISFIED)
+    sync_mark_done(handle);
+
+  C->result = res;
 }
 
 void h_glDeleteSync(BridgeCtrl *C, uint8_t *D)
@@ -671,13 +730,16 @@ void h_glDeleteSync(BridgeCtrl *C, uint8_t *D)
   (void)D;
   AR(r);
 
-  uint32_t id = ar_u32(&r);
-  GLsync s = lookup_sync(id);
+  uint32_t handle = ar_u32(&r);
+  GLsync s = lookup_sync(handle);
 
   if (s)
+  {
+    uint32_t id = handle & BRIDGE_SYNC_ID_MASK;
     glDeleteSync(s);
-
-  free_sync(id);
+    syncs[id].real = NULL;
+    syncs[id].gen = 0;
+  }
 }
 
 static void proxy_debug_callback(GLenum source, GLenum type, GLuint id,

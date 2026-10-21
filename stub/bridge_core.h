@@ -3,6 +3,8 @@
  * bridge_core.h — internal API for the aarch64 stub side.
  */
 #include "gles_bridge_protocol.h"
+#include <stdatomic.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -14,9 +16,16 @@ void bridge_send_void(void);
 uint64_t bridge_send_call(void);
 uint64_t bridge_send_swap(void);
 BridgeCtrl *bridge_ctrl(void);
+
+// all performance related:
 uint8_t *bridge_result_buf(void);
 uint32_t bridge_result_len(void);
 uint64_t bridge_result_val(void);
+uint32_t bridge_sync_alloc(void);          /* returns handle, 0 on exhaustion */
+void     bridge_sync_free(uint32_t handle);
+bool     bridge_sync_done(uint32_t handle);
+extern _Atomic unsigned int g_surface_gen; /* bump when any window size may change */
+extern _Atomic unsigned int g_swap_count; // Buffer age can only change when a swap happens
 
 /* arg is evaluated and discarded so existing `BridgeCtrl *C2` locals
  * don't become unused-variable warnings */

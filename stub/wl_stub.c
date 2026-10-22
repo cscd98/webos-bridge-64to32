@@ -469,6 +469,9 @@ static int is_callback_handle(uint32_t h)
 /* Called from wl_proxy_add_listener when h is a callback handle */
 static void _fire_callback_done(uint32_t idx)
 {
+#ifdef DEBUG_WAYLAND
+  log_always("_fire_callback_done: idx=%u", idx);
+#endif
   CallbackSlot *s = &g_callbacks[idx];
   void *cb_handle = (void *)H2P(BH_CALLBACK_BASE + idx);
 
@@ -1032,7 +1035,8 @@ void _bridge_dispatch(int roundtrip)
   /* ── deliver pending wl_callback done events ── */
   for (uint32_t i = 0; i < MAX_CALLBACKS; i++)
   {
-    if (g_bs.callback_pending[i] && g_callbacks[i].funcs)
+    if (g_bs.callback_pending[i] &&
+      (g_callbacks[i].funcs || g_callbacks[i].dispatch_fn))
     {
       g_bs.callback_pending[i] = 0;
       _fire_callback_done(i);

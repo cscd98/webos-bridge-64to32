@@ -30,7 +30,7 @@ void reg_global_remove(void *data, struct wl_registry *reg, uint32_t name)
   (void)name;
 }
 
-static const struct wl_registry_listener reg_listener = {
+static const struct wl_registry_listener reg_listener __attribute__((unused)) = {
     .global = reg_global,
     .global_remove = reg_global_remove,
 };

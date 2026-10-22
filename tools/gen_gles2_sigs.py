@@ -350,11 +350,11 @@ void h_InvokeDynamic(
                 tnorm = normalize_type(t)
                 b = base_type(tnorm)
                 if "*" in tnorm or b in POINTER_TYPEDEFS:
-                    call_args.append(f'({tnorm})ar_u64(&r)')
+                    call_args.append(f'({tnorm})(uintptr_t)ar_u64(&r)')
                 else:
                     unpack = UNPACK_MAP.get(b)
                     if unpack is None:
-                        call_args.append(f'({tnorm})ar_u64(&r)')
+                        call_args.append(f'({tnorm})(uintptr_t)ar_u64(&r)')
                     else:
                         fn_ar, _ = unpack
                         call_args.append(f'({tnorm}){fn_ar}(&r)')

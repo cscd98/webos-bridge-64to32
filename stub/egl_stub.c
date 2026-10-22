@@ -18,7 +18,9 @@
  *
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <GLES3/gl32.h>
 #include <EGL/egl.h>
@@ -101,6 +103,7 @@ EGLAPI EGLint EGLAPIENTRY eglGetError(void)
 EGLAPI EGLDisplay EGLAPIENTRY eglGetPlatformDisplayEXT(
     EGLenum platform, void *native, const EGLint *attrib_list)
 {
+  (void)attrib_list;
 #ifdef DEBUG
   log_console(
       "[eglGetPlatformDisplayEXT] platform=0x%x native=%p (u64=0x%016llx)",
@@ -557,13 +560,13 @@ EGLAPI EGLSurface EGLAPIENTRY eglCreateWindowSurface(
       native_window ? (const struct wl_egl_window *)(uintptr_t)native_window
                     : NULL;
 
-  void *surface = ew ? ew->surface : 0;
   uint32_t win_slot = ew ? ew->slot : 0;
   int win_width = ew ? ew->width : 0;
   int win_height = ew ? ew->height : 0;
   uint32_t attr_sz = attrib_list_bytes(attrib_list);
 
 #ifdef DEBUG
+  void *surface = ew ? ew->surface : 0;
   log_console("2. eglCreateWindowSurface native_window=%p surf=%p width=%d "
               "height=%d win_slot=%d attr_sz=%u",
               native_window, surface, win_width, win_height, win_slot, attr_sz);

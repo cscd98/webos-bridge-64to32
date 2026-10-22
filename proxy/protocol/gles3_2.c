@@ -12,20 +12,6 @@
 MapEntry maps[MAX_MAPS];
 static SyncEntry syncs[BRIDGE_MAX_SYNCS];
 
-static void store_sync(uint32_t id, GLsync s)
-{
-  if (id == 0 || id >= BRIDGE_MAX_SYNCS)
-  {
-    log_error("store_sync: invalid sync id %u", id);
-    if (s)
-      glDeleteSync(s);
-    return;
-  }
-  if (syncs[id].real)
-    glDeleteSync(syncs[id].real);
-  syncs[id].real = s;
-}
-
 static GLsync lookup_sync(uint32_t handle)
 {
   uint32_t id = handle & BRIDGE_SYNC_ID_MASK;

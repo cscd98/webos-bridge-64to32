@@ -63,7 +63,7 @@ void proxy_fb_reset(uint32_t ctx)
 }
 #endif
 
-static void proxy_bind_fb_tracked(GLenum target, GLuint fb)
+static void __attribute__((unused)) proxy_bind_fb_tracked(GLenum target, GLuint fb)
 {
   FbBind *b = (g_current_ctx < MAX_CONTEXTS) ? &g_fb[g_current_ctx] : NULL;
 
@@ -839,6 +839,7 @@ static GLuint current_read_fb = 0;
 
 void h_glBindFramebuffer(BridgeCtrl *C, uint8_t *D)
 {
+  (void)D;
   AR(r);
 
 #ifdef DEBUG_VERBOSE
@@ -1896,6 +1897,8 @@ void h_glGetVertexAttribPointerv(BridgeCtrl *C, uint8_t *D)
 }
 
 /* VertexAttrib constant setters */
+#undef H_VA1
+#undef H_VAFV
 #define H_VA1(s, GL_T, ar_fn, fn)                                              \
   void h_glVertexAttrib1##s(BridgeCtrl *C, uint8_t *D)                         \
   {                                                                            \

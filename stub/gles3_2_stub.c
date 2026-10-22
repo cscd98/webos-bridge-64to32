@@ -21,8 +21,6 @@ StubMapEntry stub_maps[MAX_MAPS];
 static uint32_t g_active_stub_map_count = 0;
 
 /* Sync IDs handed out by glFenceSync; only touched under the bridge lock */
-static uint8_t g_sync_used[BRIDGE_MAX_SYNCS];
-static uint32_t g_sync_next = 1;
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 static void setup_scalar(GLBridgeOpcode op)
@@ -555,9 +553,9 @@ GL_APICALL void GL_APIENTRY glDeleteSync(GLsync sync)
 GL_APICALL void GL_APIENTRY glDebugMessageCallback(GLDEBUGPROC callback,
                                                    const void *userParam)
 {
+  (void)callback;
+  (void)userParam;
   BRIDGE_BEGIN();
-
-  BridgeCtrl *C = BRIDGE_CTRL();
 
   setup_scalar(OP_glDebugMessageCallback);
 
@@ -1729,7 +1727,6 @@ GL_APICALL GLboolean GL_APIENTRY glIsQuery(GLuint id)
 
   BRIDGE_SEND_CALL();
 
-  BridgeCtrl *C2 = BRIDGE_CTRL();
   return (GLboolean)GL_RESULT_VAL();
 }
 
@@ -2035,7 +2032,6 @@ GL_APICALL GLboolean GL_APIENTRY glIsSampler(GLuint sampler)
 
   BRIDGE_SEND_CALL();
 
-  BridgeCtrl *C2 = BRIDGE_CTRL();
   return (GLboolean)GL_RESULT_VAL();
 }
 
@@ -2165,7 +2161,6 @@ glGetUniformBlockIndex(GLuint program, const GLchar *uniformBlockName)
 
   BRIDGE_SEND_CALL();
 
-  BridgeCtrl *C2 = BRIDGE_CTRL();
   return (GLuint)GL_RESULT_VAL();
 }
 
@@ -2346,7 +2341,6 @@ GL_APICALL GLboolean GL_APIENTRY glIsTransformFeedback(GLuint id)
 
   BRIDGE_SEND_CALL();
 
-  BridgeCtrl *C2 = BRIDGE_CTRL();
   return (GLboolean)GL_RESULT_VAL();
 }
 

@@ -225,6 +225,7 @@ static void _wss_transform_configure(void *d, struct wl_webos_shell_surface *s,
                                      int32_t w, int32_t h, int32_t transform)
 {
   (void)d;
+  (void)transform;
 #ifdef DEBUG_WAYLAND
   log_console("webos_ss event: transform_configure s:%p %dx%d transform:%d", s,
               w, h, transform);
@@ -307,6 +308,8 @@ static void _kbd_enter(void *d, struct wl_keyboard *k, uint32_t ser,
   (void)d;
   (void)k;
   (void)a;
+  (void)ser;
+  (void)s;
 #ifdef DEBUG_WAYLAND
   log_console("kbd ENTER: keyboard=%p surface=%p serial=%u", k, s, ser);
 #endif
@@ -318,6 +321,8 @@ static void _kbd_leave(void *d, struct wl_keyboard *k, uint32_t ser,
 {
   (void)d;
   (void)k;
+  (void)ser;
+  (void)s;
 #ifdef DEBUG_WAYLAND
   log_console("kbd LEAVE: keyboard=%p surface=%p serial=%u", k, s, ser);
 #endif
@@ -409,6 +414,7 @@ static void pxy_on_webos_seat_info(void *data, void *seat, uint32_t id,
                                    const char *name, uint32_t desig,
                                    uint32_t caps)
 {
+  (void)seat;
   ProxyWebOSSeatInfo *s = (ProxyWebOSSeatInfo *)data;
   s->id = id;
   s->designator = desig;

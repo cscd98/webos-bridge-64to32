@@ -9,6 +9,7 @@
 #include "../tools/egl_generated.h"
 #include "../tools/gles2_generated.h"
 
+#undef LOG_PREFIX
 #define LOG_PREFIX "[proxy/egl]"
 
 #if defined(DEBUG_VERBOSE) || defined(HAVE_OWN_WAYLAND_CLIENT)
@@ -76,9 +77,6 @@ void dump_ctx(const char *where)
               draw, read);
 
   EGLint cfgid = 0;
-
-  EGLConfig cfg;
-  EGLint n = 0;
 
   eglQueryContext(d, c, EGL_CONFIG_ID, &cfgid);
 
@@ -224,6 +222,7 @@ void h_eglGetDisplay(BridgeCtrl *C, uint8_t *D)
   uint32_t wl_fd = ar_u32(&r); /* stub's eventfd */
   uint32_t watermark = ar_u32(&r);
   (void)wl_fd;
+  (void)watermark;
 
 #ifdef HAVE_OWN_WAYLAND_CLIENT
 #ifdef DEBUG_WAYLAND
@@ -605,6 +604,8 @@ void h_eglCreateWindowSurface(BridgeCtrl *C, uint8_t *D)
               "width/height:%dx%d",
               display, config, win_slot, width, height);
 #endif
+  (void)width;
+  (void)height;
 
   if (win_slot >= MAX_WL_EGL_WINDOWS)
   {
@@ -1223,6 +1224,7 @@ void h_eglGetProcAddress(BridgeCtrl *C, uint8_t *D)
 
 void h_eglCreateImageKHR(BridgeCtrl *C, uint8_t *D)
 {
+  (void)D;
   ArgReader r = ar_init(C->args, C->args_len);
 
   EGLDisplay dpy = (EGLDisplay)(uintptr_t)ar_u64(&r);
@@ -1252,6 +1254,7 @@ void h_eglCreateImageKHR(BridgeCtrl *C, uint8_t *D)
 
 void h_eglDestroyImageKHR(BridgeCtrl *C, uint8_t *D)
 {
+  (void)D;
   ArgReader r = ar_init(C->args, C->args_len);
 
   EGLDisplay dpy = (EGLDisplay)(uintptr_t)ar_u64(&r);

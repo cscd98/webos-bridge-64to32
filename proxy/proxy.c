@@ -33,7 +33,6 @@ static volatile int wl_running = 1;
 static int req_wl_efd = -1;
 static int resp_wl_efd = -1;
 static int wl_event_efd = -1;
-static WLBridge g_wl;
 
 #ifdef DEBUG_BRIDGE_VERBOSE
 uint32_t last_opc = -1;
@@ -73,7 +72,6 @@ static uint64_t g_calls_since_swap = 0;
 /* Sync */
 void h_Sync(BridgeCtrl *C, uint8_t *D)
 {
-  AR(r);
   (void)D;
   C->result = 0; /* unused */
 }
@@ -600,11 +598,6 @@ const char *get_executable_path(void)
 void close_wl_thread()
 {
   wl_running = 0;
-
-  struct sembuf op = {
-      .sem_num = SEM_REQ,
-      .sem_op = 1,
-  };
 
   pthread_join(wl_thread, NULL);
 }

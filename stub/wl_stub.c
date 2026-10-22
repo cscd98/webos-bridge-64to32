@@ -10,7 +10,9 @@
  *
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include "bridge_core.h"
 #include "gles_bridge_protocol.h"
 #define LOG_PREFIX "[wl_stub]"
@@ -384,8 +386,6 @@ static uint32_t g_callback_next = 0;
 extern const struct wl_interface wl_surface_interface;
 
 static const struct wl_message _msg_registry_global = {"global", "usu", NULL};
-static const struct wl_message _msg_registry_global_remove = {"global_remove",
-                                                              "u", NULL};
 
 static const struct wl_message _msg_seat_capabilities = {"capabilities", "u",
                                                          NULL};
@@ -788,6 +788,7 @@ static void _fire_seat_capabilities(uint32_t idx)
 #ifdef DEBUG_WAYLAND
     log_console("_fire_seat_capabilities: cap_args returned %d", ret);
 #endif
+    (void)ret;
 
     union wl_argument name_args[1];
     name_args[0].s = "default";
@@ -1139,6 +1140,7 @@ static void _fire_output_events(uint32_t idx)
 
 struct wl_display *wl_display_connect(const char *name)
 {
+  (void)name;
 #ifdef DEBUG_WAYLAND
   log_console("wl_display_connect() name = %s", name);
   log_console("pre-reset: event_efd=%d next_surface=%u id_watermark=%u",
@@ -1264,13 +1266,9 @@ int wl_display_get_fd(struct wl_display *dpy)
 
 int wl_display_dispatch(struct wl_display *dpy)
 {
-  BridgeDisplay *bd = (BridgeDisplay *)dpy;
-  uint32_t slot = -1;
-
-  if (bd)
-    slot = bd->slot;
-
 #ifdef DEBUG_WAYLAND
+  BridgeDisplay *bd = (BridgeDisplay *)dpy;
+  uint32_t slot = bd ? bd->slot : (uint32_t)-1;
   log_console("wl_display_dispatch() dpy: %p fd=%d disp slot=%d", dpy,
               wl_display_get_fd(dpy), slot);
 #endif

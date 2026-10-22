@@ -2,7 +2,6 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <poll.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -998,23 +997,16 @@ void h_wl_webos_shell_surface_set_state(BridgeCtrl *C, uint8_t *D)
  */
 #define PROXY_WEBOS_STATE_BASE (1 + INPUT_EVT_MAX * 2)
 
-/* Read and dispatch whatever events are already waiting on the socket,
- * without blocking.  Uses the prepare_read protocol because the main
- * thread's EGL reads the same display. */
-static void proxy_wl_pump(void)
+bool proxy_wl_has_events(void)
 {
-  while (wl_display_prepare_read(proxy_wl_display) != 0)
-    wl_display_dispatch_pending(proxy_wl_display);
+  if (g_input_evt_count)
+    return true;
 
-  wl_display_flush(proxy_wl_display);
+  for (int i = 0; i < PROXY_SURF_MAX; i++)
+    if (g_wss_state[i].pending && g_webos_shell_surfaces[i])
+      return true;
 
-  struct pollfd pfd = {wl_display_get_fd(proxy_wl_display), POLLIN, 0};
-  if (poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN))
-    wl_display_read_events(proxy_wl_display);
-  else
-    wl_display_cancel_read(proxy_wl_display);
-
-  wl_display_dispatch_pending(proxy_wl_display);
+  return false;
 }
 
 void h_wl_roundtrip(BridgeCtrl *C, uint8_t *D)
@@ -1031,7 +1023,8 @@ void h_wl_roundtrip(BridgeCtrl *C, uint8_t *D)
     if (roundtrip)
       wl_display_roundtrip(proxy_wl_display);
     else
-      proxy_wl_pump();
+      /* The dedicated WL thread has already read the compositor socket. */
+      wl_display_dispatch_pending(proxy_wl_display);
   }
 #ifdef DEBUG_SLOW_CALLS
   clock_gettime(CLOCK_MONOTONIC, &t1);

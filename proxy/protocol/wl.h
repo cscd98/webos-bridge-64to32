@@ -67,3 +67,6 @@ void h_wl_flush(BridgeCtrl *C, uint8_t *D);
 void h_wl_webos_shell_surface_set_state(BridgeCtrl *C, uint8_t *D);
 
 void h_wl_get_keymap(BridgeCtrl *C, uint8_t *D);
+
+/* True when an event has been queued for relay to the stub. */
+bool proxy_wl_has_events(void);

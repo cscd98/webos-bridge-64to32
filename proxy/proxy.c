@@ -7,6 +7,7 @@
 
 #include <errno.h>
 #include <pthread.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <sys/ipc.h>
@@ -31,6 +32,7 @@ static volatile int wl_running = 1;
 
 static int req_wl_efd = -1;
 static int resp_wl_efd = -1;
+static int wl_event_efd = -1;
 static WLBridge g_wl;
 
 #ifdef DEBUG_BRIDGE_VERBOSE
@@ -674,12 +676,51 @@ static void *wl_dispatch_thread(void *arg)
 
   while (wl_running)
   {
-    uint64_t val;
+    struct wl_display *dpy = proxy_wl_display;
+    struct pollfd pfds[2] = {{.fd = req_wl_efd, .events = POLLIN},
+                             {.fd = -1, .events = POLLIN}};
 
-    if (read(req_wl_efd, &val, sizeof(val)) != sizeof(val))
+    if (dpy)
     {
+      while (wl_display_prepare_read(dpy) != 0)
+        wl_display_dispatch_pending(dpy);
+      wl_display_flush(dpy);
+      pfds[1].fd = wl_display_get_fd(dpy);
+    }
+
+    int ready = poll(pfds, 2, -1);
+    if (ready < 0)
+    {
+      if (errno == EINTR)
+      {
+        if (dpy)
+          wl_display_cancel_read(dpy);
+        continue;
+      }
       break;
     }
+
+    if (dpy)
+    {
+      if ((pfds[1].revents & POLLIN) != 0)
+        wl_display_read_events(dpy);
+      else
+        wl_display_cancel_read(dpy);
+
+      wl_display_dispatch_pending(dpy);
+      if (proxy_wl_has_events() && wl_event_efd >= 0)
+      {
+        uint64_t one = 1;
+        (void)write(wl_event_efd, &one, sizeof(one));
+      }
+    }
+
+    if ((pfds[0].revents & POLLIN) == 0)
+      continue;
+
+    uint64_t val;
+    if (read(req_wl_efd, &val, sizeof(val)) != sizeof(val))
+      break;
 
     uint32_t opc = wl_ctrl->opcode;
 
@@ -742,6 +783,7 @@ int main(int argc, char **argv)
   req_wl_efd = atoi(argv[3]);
   resp_wl_efd = atoi(argv[4]);
   const char *appId = argv[5];
+  wl_event_efd = argc > 6 ? atoi(argv[6]) : -1;
 
   if (prctl(PR_SET_PDEATHSIG, SIGTERM) < 0)
     return 1;

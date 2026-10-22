@@ -25,6 +25,7 @@
 #include <string.h>
 #include <sys/eventfd.h>
 #include <sys/mman.h>
+#include <poll.h>
 #include <unistd.h>
 #include <wayland-client.h>
 #include <wayland-cursor.h>
@@ -348,6 +349,17 @@ typedef struct
 } wl_bridge_state_t;
 
 static wl_bridge_state_t g_bs;
+
+/* Signal the application's poll/epoll loop only when work is actually
+ * pending.  The fd itself is bridge-owned and is shared with the proxy. */
+static void stub_wl_kick(void)
+{
+  if (g_bs.event_efd >= 0)
+  {
+    uint64_t one = 1;
+    (void)write(g_bs.event_efd, &one, sizeof(one));
+  }
+}
 
 struct wl_webos_shell_surface;
 struct wl_webos_seat;
@@ -981,6 +993,15 @@ static void _deliver_input_events(void)
  * waiting a full round trip on the compositor every frame. */
 void _bridge_dispatch(int roundtrip)
 {
+  /* Consume the readiness notification before collecting events.  A proxy
+   * event that races with this read either appears in this collection or
+   * leaves a new notification for the next event-loop iteration. */
+  if (g_bs.event_efd >= 0)
+  {
+    uint64_t ignored;
+    (void)read(g_bs.event_efd, &ignored, sizeof(ignored));
+  }
+
   _fire_globals();
 
   /* Fire any deferred seat capabilities */
@@ -1031,9 +1052,6 @@ void _bridge_dispatch(int roundtrip)
 
   /* ── fire keyboard focus before delivering events ── */
   _fire_keyboard_focus();
-
-  uint64_t one = 1;
-  (void)write(g_bs.event_efd, &one, sizeof(one));
 
   _deliver_input_events();
 }
@@ -1125,11 +1143,9 @@ struct wl_display *wl_display_connect(const char *name)
 
   BRIDGE_BEGIN_WL();
 
-  if (g_bs.event_efd > 0)
-    close(g_bs.event_efd);
   memset(&g_bs, 0, sizeof(g_bs));
   g_bs.next_surface = BH_SURFACE_BASE;
-  g_bs.event_efd = eventfd(0, EFD_NONBLOCK);
+  g_bs.event_efd = bridge_wl_event_fd();
 
 #ifdef DEBUG_WAYLAND
   log_console("post-reset: event_efd=%d", g_bs.event_efd);
@@ -1228,19 +1244,10 @@ void wl_display_disconnect(struct wl_display *dpy)
 
   bridge_send_call_wl();
 
-  /* Only close the shared event fd when the LAST active bridge display
-   * disconnects.  Closing it prematurely kills wl_display_get_fd() for
-   * every other active display (they all share g_bs.event_efd). */
+  /* The bridge owns the shared readiness FD; displays must not close it. */
   if (--g_active_bridge_displays <= 0)
   {
-    close(g_bs.event_efd);
-    g_bs.event_efd = -1;
     g_active_bridge_displays = 0;
-    if (g_bs.event_efd > 0)
-    {
-      close(g_bs.event_efd);
-      g_bs.event_efd = -1;
-    }
   }
 }
 
@@ -1266,8 +1273,9 @@ int wl_display_dispatch(struct wl_display *dpy)
 
   if (!IS_BRIDGE_DPY(dpy))
     return REAL(wl_display_dispatch)(dpy);
-  /* blocking variant: keep a real round trip */
-  _bridge_dispatch(1);
+  struct pollfd pfd = {.fd = g_bs.event_efd, .events = POLLIN};
+  if (poll(&pfd, 1, -1) > 0 && (pfd.revents & POLLIN))
+    _bridge_dispatch(0);
   return 0;
 }
 
@@ -1283,8 +1291,9 @@ int wl_display_dispatch_queue(struct wl_display *dpy, struct wl_event_queue *q)
 {
   if (!IS_BRIDGE_DPY(dpy))
     return REAL(wl_display_dispatch_queue)(dpy, q);
-  /* blocking variant: keep a real round trip */
-  _bridge_dispatch(1);
+  struct pollfd pfd = {.fd = g_bs.event_efd, .events = POLLIN};
+  if (poll(&pfd, 1, -1) > 0 && (pfd.revents & POLLIN))
+    _bridge_dispatch(0);
   return 0;
 }
 
@@ -1338,6 +1347,7 @@ int wl_display_read_events(struct wl_display *dpy)
 {
   if (!IS_BRIDGE_DPY(dpy))
     return REAL(wl_display_read_events)(dpy);
+
   _bridge_dispatch(0);
   return 0;
 }
@@ -1534,6 +1544,7 @@ int wl_proxy_add_listener(struct wl_proxy *proxy, void (**impl)(void),
 #endif
     g_bs.reg_listener = (const struct wl_registry_listener *)impl;
     g_bs.reg_listener_data = data;
+    stub_wl_kick();
     return 0;
   }
   if (h >= BH_SEAT_BASE && h < BH_SEAT_BASE + MAX_SEATS)
@@ -1560,6 +1571,7 @@ int wl_proxy_add_listener(struct wl_proxy *proxy, void (**impl)(void),
     /* Don't fire output events inline (we may be inside a global callback).
      * Mark as pending so they fire on the next dispatch/roundtrip call.  */
     g_bs.output_events_pending[idx] = 1;
+    stub_wl_kick();
     return 0;
   }
   if (h >= BH_WEBOS_SURF_BASE && h < BH_WEBOS_SURF_BASE + 100)
@@ -1624,6 +1636,7 @@ int wl_proxy_add_listener(struct wl_proxy *proxy, void (**impl)(void),
     g_callbacks[idx].funcs = impl;
     g_callbacks[idx].data = data;
     g_bs.callback_pending[idx] = 1;
+    stub_wl_kick();
     return 0;
   }
 
@@ -1692,6 +1705,7 @@ int wl_proxy_add_dispatcher(struct wl_proxy *proxy,
     g_bs.reg_dispatch_fn = dispatcher_func;
     g_bs.reg_dispatch_impl = dispatcher_data;
     g_bs.reg_dispatch_data = data;
+    stub_wl_kick();
     return 0;
   }
 
@@ -1709,6 +1723,7 @@ int wl_proxy_add_dispatcher(struct wl_proxy *proxy,
     /* deferring by one _bridge_dispatch cycle gives kodi time to set the
      * handler. */
     g_bs.seat_caps_pending[idx] = 1;
+    stub_wl_kick();
     return 0;
   }
 
@@ -1719,6 +1734,7 @@ int wl_proxy_add_dispatcher(struct wl_proxy *proxy,
     g_bs.outputs[idx].dispatch_impl = dispatcher_data;
     g_bs.outputs[idx].dispatch_data = data;
     g_bs.output_events_pending[idx] = 1;
+    stub_wl_kick();
     return 0;
   }
 
@@ -1771,6 +1787,7 @@ int wl_proxy_add_dispatcher(struct wl_proxy *proxy,
     g_callbacks[idx].dispatch_impl = dispatcher_data;
     g_callbacks[idx].dispatch_data = data;
     g_bs.callback_pending[idx] = 1;
+    stub_wl_kick();
     return 0;
   }
 

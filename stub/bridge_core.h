@@ -63,6 +63,9 @@ extern _Atomic unsigned int g_swap_count; // Buffer age can only change when a s
 void wl_bridge_init(void);
 void wl_bridge_begin(void);
 void wl_bridge_end(void);
+/* Readiness FD shared with the proxy.  It is the synthetic Wayland FD
+ * returned by wl_display_get_fd() for bridge displays. */
+int bridge_wl_event_fd(void);
 
 uint64_t bridge_send_call_wl(void);
 void bridge_data_read_wl(void *dst, uint32_t offset, size_t size);

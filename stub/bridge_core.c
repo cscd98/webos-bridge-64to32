@@ -64,6 +64,7 @@ static int resp_efd = -1;
 
 static int req_wl_efd = -1;
 static int resp_wl_efd = -1;
+static int wl_event_efd = -1;
 static WLBridge g_wl;
 
 /* ── libEGL needs to notify libGLES of a change in context ─────────── */
@@ -258,6 +259,12 @@ static void bridge_cleanup(void)
     g_proxy_pid = -1;
   }
 
+  if (wl_event_efd >= 0)
+  {
+    close(wl_event_efd);
+    wl_event_efd = -1;
+  }
+
   /* Remove shared memory so the next run always starts clean */
   shm_destroy(GLES_BRIDGE_CTRL_SHM, &g_ctrl_shm);
   shm_destroy(GLES_BRIDGE_DATA_SHM, &g_data_shm);
@@ -297,9 +304,10 @@ static int start_proxy(void)
   snprintf(req_str, sizeof(req_str), "%d", req_efd);
   snprintf(resp_str, sizeof(resp_str), "%d", resp_efd);
 
-  char req_wl_str[32], resp_wl_str[32];
+  char req_wl_str[32], resp_wl_str[32], wl_event_str[32];
   snprintf(req_wl_str, sizeof(req_wl_str), "%d", req_wl_efd);
   snprintf(resp_wl_str, sizeof(resp_wl_str), "%d", resp_wl_efd);
+  snprintf(wl_event_str, sizeof(wl_event_str), "%d", wl_event_efd);
 
   const char *appId = getenv("APPID") ? getenv("APPID") : "";
 
@@ -314,7 +322,8 @@ static int start_proxy(void)
   if (pid == 0)
   {
     /* Child — will become the proxy process */
-    execl(bin, bin, req_str, resp_str, req_wl_str, resp_wl_str, appId, NULL);
+    execl(bin, bin, req_str, resp_str, req_wl_str, resp_wl_str, appId,
+          wl_event_str, NULL);
     log_console("execl(%s) FAILED: %s", bin, strerror(errno));
     _exit(1);
   }
@@ -394,6 +403,15 @@ static void bridge_init(void)
   }
   log_console("req_wl_efd=%d resp_wl_efd=%d", req_wl_efd, resp_wl_efd);
 
+  /* This FD is inherited by the proxy and is the readiness source handed to
+   * the 64-bit client's Wayland event loop. */
+  wl_event_efd = eventfd(0, EFD_NONBLOCK);
+  if (wl_event_efd < 0)
+  {
+    log_console("wl event notification eventfd: %s", strerror(errno));
+    abort();
+  }
+
   wl_bridge_init();
 
   log_console("bridge_init() - setting up bridge_cleanup");
@@ -427,6 +445,11 @@ static void bridge_init(void)
   usleep(150000);
 
   log_console("ready");
+}
+
+int bridge_wl_event_fd(void)
+{
+  return wl_event_efd;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

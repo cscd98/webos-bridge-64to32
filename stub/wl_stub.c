@@ -306,6 +306,7 @@ typedef struct
   int output_events_pending[MAX_OUTPUTS]; /* 1 = need to fire events on next
                                              dispatch */
   int callback_pending[MAX_CALLBACKS];
+  int callback_armed[MAX_CALLBACKS];
 
   listener_slot_t keyboards[MAX_SEATS];
   listener_slot_t pointers[MAX_SEATS];
@@ -458,6 +459,8 @@ static uint32_t alloc_callback(void)
   g_callbacks[idx].dispatch_fn = NULL;
   g_callbacks[idx].dispatch_impl = NULL;
   g_callbacks[idx].dispatch_data = NULL;
+  g_bs.callback_pending[idx] = 0;
+  g_bs.callback_armed[idx] = 0;
   return idx;
 }
 
@@ -1033,16 +1036,30 @@ void _bridge_dispatch(int roundtrip)
     }
   }
 
-  /* ── deliver pending wl_callback done events ── */
+  /* ── deliver pending wl_callback done events (two-phase) ── */
+  int cb_rearm = 0;
   for (uint32_t i = 0; i < MAX_CALLBACKS; i++)
   {
-    if (g_bs.callback_pending[i] &&
-      (g_callbacks[i].funcs || g_callbacks[i].dispatch_fn))
+    if (!g_bs.callback_pending[i] ||
+        !(g_callbacks[i].funcs || g_callbacks[i].dispatch_fn))
+      continue;
+
+    if (!g_bs.callback_armed[i])
     {
-      g_bs.callback_pending[i] = 0;
-      _fire_callback_done(i);
+      /* first sighting: the app may not have attached its on_done handler
+       * yet (waylandpp registers the dispatcher in the constructor).
+       * Fire on the next cycle instead. */
+      g_bs.callback_armed[i] = 1;
+      cb_rearm = 1;
+      continue;
     }
+
+    g_bs.callback_pending[i] = 0;
+    g_bs.callback_armed[i] = 0;
+    _fire_callback_done(i);
   }
+  if (cb_rearm)
+    stub_wl_kick();
 
   BRIDGE_BEGIN_WL();
 
@@ -1057,6 +1074,10 @@ void _bridge_dispatch(int roundtrip)
 
   /* ── fire keyboard focus before delivering events ── */
   _fire_keyboard_focus();
+
+  const uint32_t *rb = (const uint32_t *)WL_RESULT(BRIDGE_CTRL_WL());
+  if (rb[0] > 0 || rb[WEBOS_STATE_BASE] > 0)
+    stub_wl_kick();
 
   _deliver_input_events();
 }
@@ -1637,6 +1658,7 @@ int wl_proxy_add_listener(struct wl_proxy *proxy, void (**impl)(void),
     uint32_t idx = h - BH_CALLBACK_BASE;
     g_callbacks[idx].funcs = impl;
     g_callbacks[idx].data = data;
+    g_bs.callback_armed[idx] = 0;
     g_bs.callback_pending[idx] = 1;
     stub_wl_kick();
     return 0;
@@ -1788,6 +1810,7 @@ int wl_proxy_add_dispatcher(struct wl_proxy *proxy,
     g_callbacks[idx].dispatch_fn = dispatcher_func;
     g_callbacks[idx].dispatch_impl = dispatcher_data;
     g_callbacks[idx].dispatch_data = data;
+    g_bs.callback_armed[idx] = 0;
     g_bs.callback_pending[idx] = 1;
     stub_wl_kick();
     return 0;
